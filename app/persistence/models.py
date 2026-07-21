@@ -1,0 +1,77 @@
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
+
+from sqlalchemy import DateTime, Enum, Integer, String
+from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.domain.heartbeat import HeartbeatStatus
+from app.persistence.base import Base
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+class Heartbeat(Base):
+    __tablename__ = "heartbeats"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+
+    owner_name: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    owner_email: Mapped[str] = mapped_column(
+        String(320),
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[HeartbeatStatus] = mapped_column(
+        Enum(
+            HeartbeatStatus,
+            name="heartbeat_status",
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        nullable=False,
+        default=HeartbeatStatus.ACTIVE,
+    )
+
+    interval_days: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    reminder_days: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    last_checkin_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    next_due_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+    )
