@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
-from app.domain.heartbeat import HeartbeatStatus
+from app.domain.heartbeat import CheckInStatus, HeartbeatStatus
 
 
 class HeartbeatCreate(BaseModel):
@@ -33,3 +33,20 @@ class HeartbeatResponse(BaseModel):
     next_due_at: datetime
     created_at: datetime
     updated_at: datetime
+
+
+class HeartbeatCheckInCreate(BaseModel):
+    status: CheckInStatus = CheckInStatus.OK
+    notes: str | None = Field(default=None, max_length=5000)
+    source: str = Field(default="manual", min_length=1, max_length=50)
+
+
+class HeartbeatCheckInResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    heartbeat_id: UUID
+    status: CheckInStatus
+    notes: str | None
+    source: str
+    created_at: datetime
