@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     application_version: str = "0.1.0"
     environment: str = "development"
 
+    heartbeat_scheduler_enabled: bool = False
+    heartbeat_scheduler_interval_seconds: int = 300
+
     database_host: str = "postgres"
     database_port: int = 5432
     database_name: str = "continuity"
