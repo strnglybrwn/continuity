@@ -1,11 +1,11 @@
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum, Integer, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.domain.heartbeat import HeartbeatStatus
+from app.domain.heartbeat import CheckInStatus, HeartbeatStatus
 from app.persistence.base import Base
 
 
@@ -74,4 +74,58 @@ class Heartbeat(Base):
         nullable=False,
         default=utc_now,
         onupdate=utc_now,
+    )
+
+    checkins: Mapped[list["HeartbeatCheckIn"]] = relationship(
+        back_populates="heartbeat",
+        cascade="all, delete-orphan",
+        order_by=lambda: HeartbeatCheckIn.created_at.desc(),
+    )
+
+
+class HeartbeatCheckIn(Base):
+    __tablename__ = "heartbeat_checkins"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+
+    heartbeat_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("heartbeats.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[CheckInStatus] = mapped_column(
+        Enum(
+            CheckInStatus,
+            name="checkin_status",
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        nullable=False,
+        default=CheckInStatus.OK,
+    )
+
+    notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    source: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="manual",
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+
+    heartbeat: Mapped[Heartbeat] = relationship(
+        back_populates="checkins",
     )

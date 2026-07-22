@@ -6,3 +6,8 @@ class HeartbeatStatus(StrEnum):
     OVERDUE = "overdue"
     PAUSED = "paused"
     CANCELLED = "cancelled"
+
+
+class CheckInStatus(StrEnum):
+    OK = "ok"
+    WARNING = "warning"
