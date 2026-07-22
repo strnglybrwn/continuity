@@ -1,9 +1,10 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
 from uuid import uuid4
 
+from app.config import settings
 from app.api.heartbeat_schemas import (
     HeartbeatCheckInCreate,
     HeartbeatCreate,
@@ -480,3 +481,58 @@ def test_heartbeat_evaluation_result_is_immutable() -> None:
 
     with pytest.raises(AttributeError):
         result.changed = 3
+
+
+def test_create_heartbeat_uses_configured_lifecycle_day(
+    monkeypatch,
+) -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    session = MagicMock()
+
+    monkeypatch.setattr(settings, "lifecycle_day_seconds", 60)
+
+    request = HeartbeatCreate(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        interval_days=30,
+        reminder_days=7,
+    )
+
+    heartbeat = create_heartbeat(
+        session,
+        request,
+        clock=lambda: now,
+    )
+
+    assert heartbeat.next_due_at == now + timedelta(minutes=30)
+
+
+def test_create_heartbeat_checkin_uses_configured_lifecycle_day(
+    monkeypatch,
+) -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat_id = uuid4()
+
+    monkeypatch.setattr(settings, "lifecycle_day_seconds", 60)
+
+    heartbeat = Heartbeat(
+        id=heartbeat_id,
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.OVERDUE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 1, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = heartbeat
+
+    create_heartbeat_checkin(
+        session,
+        heartbeat_id,
+        HeartbeatCheckInCreate(),
+        clock=lambda: now,
+    )
+
+    assert heartbeat.next_due_at == now + timedelta(minutes=30)
