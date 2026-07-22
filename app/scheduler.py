@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from app.persistence.database import SessionLocal
+from app.persistence.database import create_db_session as SessionLocal
 from app.services.heartbeat_service import (
     HeartbeatEvaluationResult,
     evaluate_due_heartbeats,
