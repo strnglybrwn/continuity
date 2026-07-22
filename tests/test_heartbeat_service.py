@@ -5,7 +5,12 @@ from uuid import uuid4
 from app.api.heartbeat_schemas import HeartbeatCheckInCreate
 from app.domain.heartbeat import CheckInStatus, HeartbeatStatus
 from app.persistence.models import Heartbeat
-from app.services.heartbeat_service import create_heartbeat_checkin
+from app.services.heartbeat_service import (
+    create_heartbeat_checkin,
+    determine_heartbeat_status,
+    refresh_heartbeat_status,
+    refresh_heartbeat_statuses,
+)
 
 
 def test_create_heartbeat_checkin_updates_heartbeat() -> None:
@@ -66,3 +71,234 @@ def test_create_heartbeat_checkin_returns_none_when_not_found() -> None:
     assert result is None
     session.add.assert_not_called()
     session.commit.assert_not_called()
+
+
+def test_active_heartbeat_becomes_overdue_after_due_time() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    heartbeat = Heartbeat(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 22, 11, 59, tzinfo=UTC),
+    )
+
+    result = determine_heartbeat_status(
+        heartbeat,
+        now=now,
+    )
+
+    assert result == HeartbeatStatus.OVERDUE
+
+
+def test_heartbeat_due_exactly_now_is_overdue() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    heartbeat = Heartbeat(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=now,
+    )
+
+    result = determine_heartbeat_status(
+        heartbeat,
+        now=now,
+    )
+
+    assert result == HeartbeatStatus.OVERDUE
+
+
+def test_active_heartbeat_before_due_time_remains_active() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    heartbeat = Heartbeat(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 23, 12, 0, tzinfo=UTC),
+    )
+
+    result = determine_heartbeat_status(
+        heartbeat,
+        now=now,
+    )
+
+    assert result == HeartbeatStatus.ACTIVE
+
+
+def test_overdue_heartbeat_remains_overdue_until_checkin() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    heartbeat = Heartbeat(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.OVERDUE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 8, 22, 12, 0, tzinfo=UTC),
+    )
+
+    result = determine_heartbeat_status(
+        heartbeat,
+        now=now,
+    )
+
+    assert result == HeartbeatStatus.OVERDUE
+
+
+def test_paused_heartbeat_is_not_changed_automatically() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    heartbeat = Heartbeat(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.PAUSED,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 1, tzinfo=UTC),
+    )
+
+    result = determine_heartbeat_status(
+        heartbeat,
+        now=now,
+    )
+
+    assert result == HeartbeatStatus.PAUSED
+
+
+def test_cancelled_heartbeat_is_not_changed_automatically() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    heartbeat = Heartbeat(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.CANCELLED,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 1, tzinfo=UTC),
+    )
+
+    result = determine_heartbeat_status(
+        heartbeat,
+        now=now,
+    )
+
+    assert result == HeartbeatStatus.CANCELLED
+
+
+def test_refresh_heartbeat_status_persists_changed_status() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    heartbeat = Heartbeat(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 1, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+
+    result = refresh_heartbeat_status(
+        session,
+        heartbeat,
+        now=now,
+    )
+
+    assert result.status == HeartbeatStatus.OVERDUE
+    session.commit.assert_called_once()
+    session.refresh.assert_called_once_with(heartbeat)
+
+
+def test_refresh_heartbeat_status_does_not_commit_when_unchanged() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    heartbeat = Heartbeat(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+
+    result = refresh_heartbeat_status(
+        session,
+        heartbeat,
+        now=now,
+    )
+
+    assert result.status == HeartbeatStatus.ACTIVE
+    session.commit.assert_not_called()
+    session.refresh.assert_not_called()
+
+
+def test_refresh_heartbeat_statuses_uses_single_commit() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    overdue = Heartbeat(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 1, tzinfo=UTC),
+    )
+
+    current = Heartbeat(
+        owner_name="Zoe",
+        owner_email="zoe@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+
+    result = refresh_heartbeat_statuses(
+        session,
+        [overdue, current],
+        now=now,
+    )
+
+    assert result == [overdue, current]
+    assert overdue.status == HeartbeatStatus.OVERDUE
+    assert current.status == HeartbeatStatus.ACTIVE
+    session.commit.assert_called_once()
+    assert session.refresh.call_count == 2
+
+
+def test_refresh_heartbeat_statuses_skips_commit_when_none_change() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    heartbeat = Heartbeat(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+
+    result = refresh_heartbeat_statuses(
+        session,
+        [heartbeat],
+        now=now,
+    )
+
+    assert result == [heartbeat]
+    session.commit.assert_not_called()
+    session.refresh.assert_not_called()
