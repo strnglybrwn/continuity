@@ -11,3 +11,10 @@ class HeartbeatStatus(StrEnum):
 class CheckInStatus(StrEnum):
     OK = "ok"
     WARNING = "warning"
+
+
+class HeartbeatEventType(StrEnum):
+    REMINDER_DUE = "reminder_due"
+    OVERDUE = "overdue"
+    CHECKED_IN = "checked_in"
+    ESCALATION_DUE = "escalation_due"
