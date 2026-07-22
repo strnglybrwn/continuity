@@ -4,9 +4,16 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.persistence.models import Heartbeat, HeartbeatCheckInToken
+from app.api.heartbeat_schemas import HeartbeatCheckInCreate
+from app.persistence.models import (
+    Heartbeat,
+    HeartbeatCheckIn,
+    HeartbeatCheckInToken,
+)
+from app.services.heartbeat_service import _apply_heartbeat_checkin
 
 
 DEFAULT_TOKEN_LIFETIME = timedelta(hours=24)
@@ -63,3 +70,55 @@ def issue_checkin_token(
         raw_token=raw_token,
         token=token,
     )
+
+
+def redeem_checkin_token(
+    session: Session,
+    raw_token: str,
+    *,
+    now: datetime | None = None,
+) -> HeartbeatCheckIn | None:
+    """Redeem a valid check-in token exactly once.
+
+    Invalid, expired, already-used, and orphaned tokens all return None.
+    The token row is locked until the transaction completes so concurrent
+    redemption attempts cannot both succeed.
+    """
+    redeemed_at = now or datetime.now(UTC)
+    token_hash = hash_checkin_token(raw_token)
+
+    statement = (
+        select(HeartbeatCheckInToken)
+        .where(HeartbeatCheckInToken.token_hash == token_hash)
+        .with_for_update()
+    )
+
+    token = session.execute(statement).scalar_one_or_none()
+
+    if token is None:
+        return None
+
+    if token.used_at is not None:
+        return None
+
+    if token.expires_at <= redeemed_at:
+        return None
+
+    heartbeat = session.get(Heartbeat, token.heartbeat_id)
+
+    if heartbeat is None:
+        return None
+
+    checkin = _apply_heartbeat_checkin(
+        session,
+        heartbeat,
+        HeartbeatCheckInCreate(source="token"),
+        created_at=redeemed_at,
+    )
+
+    token.used_at = redeemed_at
+    session.commit()
+    session.refresh(checkin)
+    session.refresh(heartbeat)
+
+    return checkin

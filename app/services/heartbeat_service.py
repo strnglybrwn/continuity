@@ -166,6 +166,33 @@ def list_heartbeats(
     )
 
 
+def _apply_heartbeat_checkin(
+    session: Session,
+    heartbeat: Heartbeat,
+    request: HeartbeatCheckInCreate,
+    *,
+    created_at: datetime,
+) -> HeartbeatCheckIn:
+    """Apply a check-in without committing the surrounding transaction."""
+    checkin = HeartbeatCheckIn(
+        heartbeat_id=heartbeat.id,
+        status=request.status,
+        notes=request.notes,
+        source=request.source,
+        created_at=created_at,
+    )
+
+    heartbeat.status = HeartbeatStatus.ACTIVE
+    heartbeat.last_checkin_at = created_at
+    heartbeat.next_due_at = created_at + timedelta(
+        days=heartbeat.interval_days,
+    )
+
+    session.add(checkin)
+
+    return checkin
+
+
 def create_heartbeat_checkin(
     session: Session,
     heartbeat_id: UUID,
@@ -176,21 +203,13 @@ def create_heartbeat_checkin(
     if heartbeat is None:
         return None
 
-    now = datetime.now(UTC)
-
-    checkin = HeartbeatCheckIn(
-        heartbeat_id=heartbeat.id,
-        status=request.status,
-        notes=request.notes,
-        source=request.source,
-        created_at=now,
+    checkin = _apply_heartbeat_checkin(
+        session,
+        heartbeat,
+        request,
+        created_at=datetime.now(UTC),
     )
 
-    heartbeat.status = HeartbeatStatus.ACTIVE
-    heartbeat.last_checkin_at = now
-    heartbeat.next_due_at = now + timedelta(days=heartbeat.interval_days)
-
-    session.add(checkin)
     session.commit()
     session.refresh(checkin)
     session.refresh(heartbeat)
