@@ -44,6 +44,26 @@ def create_heartbeat(
     return heartbeat
 
 
+def is_heartbeat_reminder_due(
+    heartbeat: Heartbeat,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """Return whether an active heartbeat is within its reminder window."""
+    if heartbeat.status != HeartbeatStatus.ACTIVE:
+        return False
+
+    if heartbeat.reminder_days <= 0:
+        return False
+
+    current_time = now if now is not None else utc_now()
+    reminder_at = heartbeat.next_due_at - lifecycle_duration(
+        heartbeat.reminder_days,
+    )
+
+    return reminder_at <= current_time < heartbeat.next_due_at
+
+
 def determine_heartbeat_status(
     heartbeat: Heartbeat,
     *,

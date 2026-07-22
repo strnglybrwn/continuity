@@ -17,6 +17,7 @@ from app.services.heartbeat_service import (
     create_heartbeat_checkin,
     determine_heartbeat_status,
     evaluate_due_heartbeats,
+    is_heartbeat_reminder_due,
     refresh_heartbeat_status,
     refresh_heartbeat_statuses,
 )
@@ -592,3 +593,91 @@ def test_heartbeat_complete_accelerated_lifecycle(
     assert heartbeat.status == HeartbeatStatus.ACTIVE
     assert heartbeat.last_checkin_at == checked_in_at
     assert heartbeat.next_due_at == checked_in_at + timedelta(minutes=30)
+
+
+@pytest.mark.parametrize(
+    ("now", "expected"),
+    [
+        (datetime(2026, 7, 22, 11, 52, tzinfo=UTC), False),
+        (datetime(2026, 7, 22, 11, 53, tzinfo=UTC), True),
+        (datetime(2026, 7, 22, 11, 59, tzinfo=UTC), True),
+        (datetime(2026, 7, 22, 12, 0, tzinfo=UTC), False),
+    ],
+)
+def test_heartbeat_reminder_due_window(
+    monkeypatch: pytest.MonkeyPatch,
+    now: datetime,
+    expected: bool,
+) -> None:
+    monkeypatch.setattr(settings, "lifecycle_day_seconds", 60)
+
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+
+    assert (
+        is_heartbeat_reminder_due(
+            heartbeat,
+            now=now,
+        )
+        is expected
+    )
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        HeartbeatStatus.OVERDUE,
+        HeartbeatStatus.PAUSED,
+        HeartbeatStatus.CANCELLED,
+    ],
+)
+def test_heartbeat_reminder_not_due_for_inactive_status(
+    monkeypatch: pytest.MonkeyPatch,
+    status: HeartbeatStatus,
+) -> None:
+    monkeypatch.setattr(settings, "lifecycle_day_seconds", 60)
+
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=status,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+
+    assert (
+        is_heartbeat_reminder_due(
+            heartbeat,
+            now=datetime(2026, 7, 22, 11, 55, tzinfo=UTC),
+        )
+        is False
+    )
+
+
+def test_heartbeat_with_zero_reminder_days_has_no_advance_reminder() -> None:
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=0,
+        next_due_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+
+    assert (
+        is_heartbeat_reminder_due(
+            heartbeat,
+            now=datetime(2026, 7, 22, 11, 59, tzinfo=UTC),
+        )
+        is False
+    )
