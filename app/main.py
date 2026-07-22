@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
@@ -8,6 +9,12 @@ from fastapi import FastAPI
 from app.api.heartbeats import router as heartbeat_router
 from app.config import settings
 from app.scheduler import run_heartbeat_scheduler
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 
 
 @asynccontextmanager
