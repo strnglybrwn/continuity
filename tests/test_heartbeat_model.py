@@ -2,7 +2,11 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.domain.heartbeat import CheckInStatus, HeartbeatStatus
-from app.persistence.models import Heartbeat, HeartbeatCheckIn
+from app.persistence.models import (
+    Heartbeat,
+    HeartbeatCheckIn,
+    HeartbeatCheckInToken,
+)
 
 
 def test_heartbeat_defaults() -> None:
@@ -65,4 +69,34 @@ def test_heartbeat_checkin_table_definition() -> None:
     assert table.c.heartbeat_id.index is True
     assert table.c.status.nullable is False
     assert table.c.source.nullable is False
+    assert table.c.created_at.nullable is False
+
+
+def test_heartbeat_checkin_token_defaults() -> None:
+    expires_at = datetime(2026, 7, 23, tzinfo=UTC)
+
+    token = HeartbeatCheckInToken(
+        heartbeat_id=uuid4(),
+        token_hash="a" * 64,
+        expires_at=expires_at,
+    )
+
+    assert token.token_hash == "a" * 64
+    assert token.expires_at == expires_at
+    assert token.used_at is None
+
+
+def test_heartbeat_checkin_token_table_definition() -> None:
+    table = HeartbeatCheckInToken.__table__
+
+    assert HeartbeatCheckInToken.__tablename__ == "heartbeat_checkin_tokens"
+    assert table.c.id.primary_key is True
+    assert table.c.id.default is not None
+    assert table.c.heartbeat_id.nullable is False
+    assert table.c.heartbeat_id.index is True
+    assert table.c.token_hash.nullable is False
+    assert table.c.token_hash.unique is True
+    assert table.c.token_hash.index is True
+    assert table.c.expires_at.nullable is False
+    assert table.c.used_at.nullable is True
     assert table.c.created_at.nullable is False

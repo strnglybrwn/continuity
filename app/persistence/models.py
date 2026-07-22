@@ -82,6 +82,12 @@ class Heartbeat(Base):
         order_by=lambda: HeartbeatCheckIn.created_at.desc(),
     )
 
+    checkin_tokens: Mapped[list["HeartbeatCheckInToken"]] = relationship(
+        back_populates="heartbeat",
+        cascade="all, delete-orphan",
+        order_by=lambda: HeartbeatCheckInToken.created_at.desc(),
+    )
+
 
 class HeartbeatCheckIn(Base):
     __tablename__ = "heartbeat_checkins"
@@ -128,4 +134,48 @@ class HeartbeatCheckIn(Base):
 
     heartbeat: Mapped[Heartbeat] = relationship(
         back_populates="checkins",
+    )
+
+
+class HeartbeatCheckInToken(Base):
+    __tablename__ = "heartbeat_checkin_tokens"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+
+    heartbeat_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("heartbeats.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    token_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+
+    heartbeat: Mapped[Heartbeat] = relationship(
+        back_populates="checkin_tokens",
     )
