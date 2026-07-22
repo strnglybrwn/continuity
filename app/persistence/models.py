@@ -7,7 +7,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.clock import utc_now
 
-from app.domain.heartbeat import CheckInStatus, HeartbeatStatus
+from app.domain.heartbeat import (
+    CheckInStatus,
+    HeartbeatEventType,
+    HeartbeatStatus,
+)
 from app.persistence.base import Base
 
 
@@ -84,6 +88,12 @@ class Heartbeat(Base):
         back_populates="heartbeat",
         cascade="all, delete-orphan",
         order_by=lambda: HeartbeatCheckInToken.created_at.desc(),
+    )
+
+    events: Mapped[list["HeartbeatEvent"]] = relationship(
+        back_populates="heartbeat",
+        cascade="all, delete-orphan",
+        order_by=lambda: HeartbeatEvent.occurred_at.desc(),
     )
 
 
@@ -176,4 +186,52 @@ class HeartbeatCheckInToken(Base):
 
     heartbeat: Mapped[Heartbeat] = relationship(
         back_populates="checkin_tokens",
+    )
+
+
+class HeartbeatEvent(Base):
+    __tablename__ = "heartbeat_events"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+
+    heartbeat_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("heartbeats.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    event_type: Mapped[HeartbeatEventType] = mapped_column(
+        Enum(
+            HeartbeatEventType,
+            name="heartbeat_event_type",
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+
+    delivered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+
+    heartbeat: Mapped[Heartbeat] = relationship(
+        back_populates="events",
     )
