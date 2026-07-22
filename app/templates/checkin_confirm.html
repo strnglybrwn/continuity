@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Confirm your check-in | Continuity</title>
+</head>
+<body>
+    <main>
+        <h1>Confirm your check-in</h1>
+        <p>Please confirm that you are safe and well.</p>
+
+        <form method="post" action="/checkins/{{ token }}">
+            <button type="submit">Confirm check-in</button>
+        </form>
+    </main>
+</body>
+</html>
