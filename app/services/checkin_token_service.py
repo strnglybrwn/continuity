@@ -1,11 +1,13 @@
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+from app.core.clock import utc_now
 
 from app.api.heartbeat_schemas import HeartbeatCheckInCreate
 from app.persistence.models import (
@@ -52,7 +54,7 @@ def issue_checkin_token(
     if heartbeat is None:
         return None
 
-    issued_at = now or datetime.now(UTC)
+    issued_at = now if now is not None else utc_now()
     raw_token = secrets.token_urlsafe(32)
 
     token = HeartbeatCheckInToken(
@@ -84,7 +86,7 @@ def redeem_checkin_token(
     The token row is locked until the transaction completes so concurrent
     redemption attempts cannot both succeed.
     """
-    redeemed_at = now or datetime.now(UTC)
+    redeemed_at = now if now is not None else utc_now()
     token_hash = hash_checkin_token(raw_token)
 
     statement = (

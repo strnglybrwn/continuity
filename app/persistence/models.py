@@ -1,16 +1,14 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.clock import utc_now
+
 from app.domain.heartbeat import CheckInStatus, HeartbeatStatus
 from app.persistence.base import Base
-
-
-def utc_now() -> datetime:
-    return datetime.now(UTC)
 
 
 class Heartbeat(Base):

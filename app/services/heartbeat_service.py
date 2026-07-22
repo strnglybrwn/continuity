@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -8,6 +8,7 @@ from app.api.heartbeat_schemas import (
     HeartbeatCheckInCreate,
     HeartbeatCreate,
 )
+from app.core.clock import Clock, utc_now
 from app.domain.heartbeat import HeartbeatStatus
 from app.persistence.models import Heartbeat, HeartbeatCheckIn
 
@@ -21,8 +22,10 @@ class HeartbeatEvaluationResult:
 def create_heartbeat(
     session: Session,
     request: HeartbeatCreate,
+    *,
+    clock: Clock = utc_now,
 ) -> Heartbeat:
-    now = datetime.now(UTC)
+    now = clock()
 
     heartbeat = Heartbeat(
         owner_name=request.owner_name,
@@ -52,7 +55,7 @@ def determine_heartbeat_status(
     }:
         return heartbeat.status
 
-    current_time = now or datetime.now(UTC)
+    current_time = now if now is not None else utc_now()
 
     if heartbeat.next_due_at <= current_time:
         return HeartbeatStatus.OVERDUE
@@ -87,7 +90,7 @@ def refresh_heartbeat_statuses(
     now: datetime | None = None,
 ) -> list[Heartbeat]:
     """Update a collection of heartbeats using a single transaction."""
-    current_time = now or datetime.now(UTC)
+    current_time = now if now is not None else utc_now()
     changed = False
 
     for heartbeat in heartbeats:
@@ -115,7 +118,7 @@ def evaluate_due_heartbeats(
     now: datetime | None = None,
 ) -> HeartbeatEvaluationResult:
     """Evaluate every active heartbeat and persist overdue transitions."""
-    current_time = now or datetime.now(UTC)
+    current_time = now if now is not None else utc_now()
 
     heartbeats = session.query(Heartbeat).filter(Heartbeat.status == HeartbeatStatus.ACTIVE).all()
 
@@ -197,6 +200,8 @@ def create_heartbeat_checkin(
     session: Session,
     heartbeat_id: UUID,
     request: HeartbeatCheckInCreate,
+    *,
+    clock: Clock = utc_now,
 ) -> HeartbeatCheckIn | None:
     heartbeat = session.get(Heartbeat, heartbeat_id)
 
@@ -207,7 +212,7 @@ def create_heartbeat_checkin(
         session,
         heartbeat,
         request,
-        created_at=datetime.now(UTC),
+        created_at=clock(),
     )
 
     session.commit()

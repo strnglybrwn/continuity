@@ -4,17 +4,89 @@ from unittest.mock import MagicMock
 import pytest
 from uuid import uuid4
 
-from app.api.heartbeat_schemas import HeartbeatCheckInCreate
+from app.api.heartbeat_schemas import (
+    HeartbeatCheckInCreate,
+    HeartbeatCreate,
+)
 from app.domain.heartbeat import CheckInStatus, HeartbeatStatus
 from app.persistence.models import Heartbeat
 from app.services.heartbeat_service import (
     HeartbeatEvaluationResult,
+    create_heartbeat,
     create_heartbeat_checkin,
     determine_heartbeat_status,
     evaluate_due_heartbeats,
     refresh_heartbeat_status,
     refresh_heartbeat_statuses,
 )
+
+
+def test_create_heartbeat_uses_injected_clock() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    session = MagicMock()
+
+    request = HeartbeatCreate(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        interval_days=30,
+        reminder_days=7,
+    )
+
+    heartbeat = create_heartbeat(
+        session,
+        request,
+        clock=lambda: now,
+    )
+
+    assert heartbeat.next_due_at == datetime(
+        2026,
+        8,
+        21,
+        12,
+        0,
+        tzinfo=UTC,
+    )
+
+    session.add.assert_called_once_with(heartbeat)
+    session.commit.assert_called_once()
+    session.refresh.assert_called_once_with(heartbeat)
+
+
+def test_create_heartbeat_checkin_uses_injected_clock() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat_id = uuid4()
+
+    heartbeat = Heartbeat(
+        id=heartbeat_id,
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.OVERDUE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 1, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = heartbeat
+
+    checkin = create_heartbeat_checkin(
+        session,
+        heartbeat_id,
+        HeartbeatCheckInCreate(),
+        clock=lambda: now,
+    )
+
+    assert checkin is not None
+    assert checkin.created_at == now
+    assert heartbeat.last_checkin_at == now
+    assert heartbeat.next_due_at == datetime(
+        2026,
+        8,
+        21,
+        12,
+        0,
+        tzinfo=UTC,
+    )
 
 
 def test_create_heartbeat_checkin_updates_heartbeat() -> None:
