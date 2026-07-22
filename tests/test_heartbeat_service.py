@@ -1,13 +1,17 @@
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
+
+import pytest
 from uuid import uuid4
 
 from app.api.heartbeat_schemas import HeartbeatCheckInCreate
 from app.domain.heartbeat import CheckInStatus, HeartbeatStatus
 from app.persistence.models import Heartbeat
 from app.services.heartbeat_service import (
+    HeartbeatEvaluationResult,
     create_heartbeat_checkin,
     determine_heartbeat_status,
+    evaluate_due_heartbeats,
     refresh_heartbeat_status,
     refresh_heartbeat_statuses,
 )
@@ -302,3 +306,105 @@ def test_refresh_heartbeat_statuses_skips_commit_when_none_change() -> None:
     assert result == [heartbeat]
     session.commit.assert_not_called()
     session.refresh.assert_not_called()
+
+
+def test_evaluate_due_heartbeats_updates_active_heartbeats() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    overdue = Heartbeat(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 1, tzinfo=UTC),
+    )
+
+    current = Heartbeat(
+        owner_name="Zoe",
+        owner_email="zoe@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.query.return_value.filter.return_value.all.return_value = [
+        overdue,
+        current,
+    ]
+
+    result = evaluate_due_heartbeats(
+        session,
+        now=now,
+    )
+
+    assert result == HeartbeatEvaluationResult(
+        evaluated=2,
+        changed=1,
+    )
+    assert overdue.status == HeartbeatStatus.OVERDUE
+    assert current.status == HeartbeatStatus.ACTIVE
+    session.commit.assert_called_once()
+    assert session.refresh.call_count == 2
+
+
+def test_evaluate_due_heartbeats_returns_zero_when_none_are_active() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    session = MagicMock()
+    session.query.return_value.filter.return_value.all.return_value = []
+
+    result = evaluate_due_heartbeats(
+        session,
+        now=now,
+    )
+
+    assert result == HeartbeatEvaluationResult(
+        evaluated=0,
+        changed=0,
+    )
+    session.commit.assert_not_called()
+    session.refresh.assert_not_called()
+
+
+def test_evaluate_due_heartbeats_does_not_commit_when_none_are_due() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    heartbeat = Heartbeat(
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.query.return_value.filter.return_value.all.return_value = [
+        heartbeat,
+    ]
+
+    result = evaluate_due_heartbeats(
+        session,
+        now=now,
+    )
+
+    assert result == HeartbeatEvaluationResult(
+        evaluated=1,
+        changed=0,
+    )
+    assert heartbeat.status == HeartbeatStatus.ACTIVE
+    session.commit.assert_not_called()
+    session.refresh.assert_not_called()
+
+
+def test_heartbeat_evaluation_result_is_immutable() -> None:
+    result = HeartbeatEvaluationResult(
+        evaluated=10,
+        changed=2,
+    )
+
+    with pytest.raises(AttributeError):
+        result.changed = 3

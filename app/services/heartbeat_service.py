@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -9,6 +10,12 @@ from app.api.heartbeat_schemas import (
 )
 from app.domain.heartbeat import HeartbeatStatus
 from app.persistence.models import Heartbeat, HeartbeatCheckIn
+
+
+@dataclass(frozen=True, slots=True)
+class HeartbeatEvaluationResult:
+    evaluated: int
+    changed: int
 
 
 def create_heartbeat(
@@ -100,6 +107,37 @@ def refresh_heartbeat_statuses(
             session.refresh(heartbeat)
 
     return heartbeats
+
+
+def evaluate_due_heartbeats(
+    session: Session,
+    *,
+    now: datetime | None = None,
+) -> HeartbeatEvaluationResult:
+    """Evaluate every active heartbeat and persist overdue transitions."""
+    current_time = now or datetime.now(UTC)
+
+    heartbeats = session.query(Heartbeat).filter(Heartbeat.status == HeartbeatStatus.ACTIVE).all()
+
+    changed = sum(
+        determine_heartbeat_status(
+            heartbeat,
+            now=current_time,
+        )
+        != heartbeat.status
+        for heartbeat in heartbeats
+    )
+
+    refresh_heartbeat_statuses(
+        session,
+        heartbeats,
+        now=current_time,
+    )
+
+    return HeartbeatEvaluationResult(
+        evaluated=len(heartbeats),
+        changed=changed,
+    )
 
 
 def get_heartbeat(
