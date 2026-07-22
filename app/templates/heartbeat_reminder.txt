@@ -1,0 +1,15 @@
+Hi {{ owner_name }},
+
+This is your scheduled Continuity check-in reminder.
+
+Please confirm that you are OK by visiting the link below:
+
+{{ checkin_url }}
+
+Your current heartbeat is due on {{ next_due_date }}.
+
+This check-in link will expire after 24 hours.
+
+If you were not expecting this message, you can safely ignore it.
+
+Continuity
