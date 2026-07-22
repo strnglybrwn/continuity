@@ -14,3 +14,22 @@ def test_lifecycle_duration_rejects_negative_days() -> None:
         assert str(exc) == "Lifecycle days cannot be negative"
     else:
         raise AssertionError("Expected lifecycle_duration() to raise ValueError")
+
+
+def test_lifecycle_duration_supports_accelerated_days() -> None:
+    assert lifecycle_duration(
+        30,
+        seconds_per_day=60,
+    ) == timedelta(minutes=30)
+
+
+def test_lifecycle_duration_rejects_non_positive_seconds_per_day() -> None:
+    try:
+        lifecycle_duration(
+            30,
+            seconds_per_day=0,
+        )
+    except ValueError as exc:
+        assert str(exc) == "Lifecycle seconds per day must be positive"
+    else:
+        raise AssertionError("Expected lifecycle_duration() to raise ValueError")

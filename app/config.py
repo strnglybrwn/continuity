@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +11,8 @@ class Settings(BaseSettings):
 
     heartbeat_scheduler_enabled: bool = False
     heartbeat_scheduler_interval_seconds: int = 300
+
+    lifecycle_day_seconds: int = Field(default=86_400, gt=0)
 
     database_host: str = "postgres"
     database_port: int = 5432
