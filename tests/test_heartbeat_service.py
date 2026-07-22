@@ -536,3 +536,59 @@ def test_create_heartbeat_checkin_uses_configured_lifecycle_day(
     )
 
     assert heartbeat.next_due_at == now + timedelta(minutes=30)
+
+
+def test_heartbeat_complete_accelerated_lifecycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_at = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat_id = uuid4()
+    session = MagicMock()
+
+    monkeypatch.setattr(settings, "lifecycle_day_seconds", 60)
+
+    heartbeat = create_heartbeat(
+        session,
+        HeartbeatCreate(
+            owner_name="Scott",
+            owner_email="scott@example.com",
+            interval_days=30,
+            reminder_days=7,
+        ),
+        clock=lambda: created_at,
+    )
+    heartbeat.id = heartbeat_id
+
+    assert heartbeat.status == HeartbeatStatus.ACTIVE
+    assert heartbeat.next_due_at == created_at + timedelta(minutes=30)
+
+    session.query.return_value.filter.return_value.all.return_value = [
+        heartbeat,
+    ]
+
+    evaluation = evaluate_due_heartbeats(
+        session,
+        now=heartbeat.next_due_at,
+    )
+
+    assert evaluation == HeartbeatEvaluationResult(
+        evaluated=1,
+        changed=1,
+    )
+    assert heartbeat.status == HeartbeatStatus.OVERDUE
+
+    checked_in_at = created_at + timedelta(minutes=35)
+    session.get.return_value = heartbeat
+
+    checkin = create_heartbeat_checkin(
+        session,
+        heartbeat_id,
+        HeartbeatCheckInCreate(),
+        clock=lambda: checked_in_at,
+    )
+
+    assert checkin is not None
+    assert checkin.created_at == checked_in_at
+    assert heartbeat.status == HeartbeatStatus.ACTIVE
+    assert heartbeat.last_checkin_at == checked_in_at
+    assert heartbeat.next_due_at == checked_in_at + timedelta(minutes=30)

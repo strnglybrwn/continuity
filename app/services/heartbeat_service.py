@@ -31,6 +31,7 @@ def create_heartbeat(
     heartbeat = Heartbeat(
         owner_name=request.owner_name,
         owner_email=str(request.owner_email),
+        status=HeartbeatStatus.ACTIVE,
         interval_days=request.interval_days,
         reminder_days=request.reminder_days,
         next_due_at=now + lifecycle_duration(request.interval_days),
