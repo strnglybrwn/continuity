@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.heartbeat_schemas import (
@@ -10,14 +11,55 @@ from app.api.heartbeat_schemas import (
 )
 from app.core.clock import Clock, utc_now
 from app.core.lifecycle import lifecycle_duration
-from app.domain.heartbeat import HeartbeatStatus
-from app.persistence.models import Heartbeat, HeartbeatCheckIn
+from app.domain.heartbeat import HeartbeatEventType, HeartbeatStatus
+from app.persistence.models import (
+    Heartbeat,
+    HeartbeatCheckIn,
+    HeartbeatEvent,
+)
 
 
 @dataclass(frozen=True, slots=True)
 class HeartbeatEvaluationResult:
     evaluated: int
     changed: int
+
+
+def record_heartbeat_event(
+    session: Session,
+    heartbeat: Heartbeat,
+    event_type: HeartbeatEventType,
+    *,
+    occurred_at: datetime,
+) -> HeartbeatEvent | None:
+    """Record an event unless the same lifecycle event already exists."""
+    existing_event_id = session.scalar(
+        select(HeartbeatEvent.id).where(
+            HeartbeatEvent.heartbeat_id == heartbeat.id,
+            HeartbeatEvent.event_type == event_type,
+            HeartbeatEvent.occurred_at == occurred_at,
+        )
+    )
+
+    if existing_event_id is not None:
+        return None
+
+    event = HeartbeatEvent(
+        heartbeat_id=heartbeat.id,
+        event_type=event_type,
+        occurred_at=occurred_at,
+        created_at=occurred_at,
+    )
+    session.add(event)
+
+    return event
+
+
+def heartbeat_reminder_at(heartbeat: Heartbeat) -> datetime:
+    """Return the start of a heartbeat's reminder window."""
+    return heartbeat.next_due_at - lifecycle_duration(
+        heartbeat.reminder_days,
+    )
 
 
 def create_heartbeat(
@@ -57,9 +99,7 @@ def is_heartbeat_reminder_due(
         return False
 
     current_time = now if now is not None else utc_now()
-    reminder_at = heartbeat.next_due_at - lifecycle_duration(
-        heartbeat.reminder_days,
-    )
+    reminder_at = heartbeat_reminder_at(heartbeat)
 
     return reminder_at <= current_time < heartbeat.next_due_at
 
@@ -139,25 +179,49 @@ def evaluate_due_heartbeats(
     *,
     now: datetime | None = None,
 ) -> HeartbeatEvaluationResult:
-    """Evaluate every active heartbeat and persist overdue transitions."""
+    """Evaluate active heartbeats and record due lifecycle events."""
     current_time = now if now is not None else utc_now()
 
     heartbeats = session.query(Heartbeat).filter(Heartbeat.status == HeartbeatStatus.ACTIVE).all()
 
-    changed = sum(
-        determine_heartbeat_status(
+    changed = 0
+    events_created = 0
+
+    for heartbeat in heartbeats:
+        if is_heartbeat_reminder_due(
+            heartbeat,
+            now=current_time,
+        ):
+            event = record_heartbeat_event(
+                session,
+                heartbeat,
+                HeartbeatEventType.REMINDER_DUE,
+                occurred_at=heartbeat_reminder_at(heartbeat),
+            )
+            events_created += event is not None
+
+        calculated_status = determine_heartbeat_status(
             heartbeat,
             now=current_time,
         )
-        != heartbeat.status
-        for heartbeat in heartbeats
-    )
 
-    refresh_heartbeat_statuses(
-        session,
-        heartbeats,
-        now=current_time,
-    )
+        if calculated_status != heartbeat.status:
+            heartbeat.status = calculated_status
+            changed += 1
+
+            event = record_heartbeat_event(
+                session,
+                heartbeat,
+                HeartbeatEventType.OVERDUE,
+                occurred_at=heartbeat.next_due_at,
+            )
+            events_created += event is not None
+
+    if changed or events_created:
+        session.commit()
+
+        for heartbeat in heartbeats:
+            session.refresh(heartbeat)
 
     return HeartbeatEvaluationResult(
         evaluated=len(heartbeats),
@@ -230,11 +294,20 @@ def create_heartbeat_checkin(
     if heartbeat is None:
         return None
 
+    created_at = clock()
+
     checkin = _apply_heartbeat_checkin(
         session,
         heartbeat,
         request,
-        created_at=clock(),
+        created_at=created_at,
+    )
+
+    record_heartbeat_event(
+        session,
+        heartbeat,
+        HeartbeatEventType.CHECKED_IN,
+        occurred_at=created_at,
     )
 
     session.commit()

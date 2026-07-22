@@ -9,8 +9,12 @@ from app.api.heartbeat_schemas import (
     HeartbeatCheckInCreate,
     HeartbeatCreate,
 )
-from app.domain.heartbeat import CheckInStatus, HeartbeatStatus
-from app.persistence.models import Heartbeat
+from app.domain.heartbeat import (
+    CheckInStatus,
+    HeartbeatEventType,
+    HeartbeatStatus,
+)
+from app.persistence.models import Heartbeat, HeartbeatEvent
 from app.services.heartbeat_service import (
     HeartbeatEvaluationResult,
     create_heartbeat,
@@ -18,6 +22,7 @@ from app.services.heartbeat_service import (
     determine_heartbeat_status,
     evaluate_due_heartbeats,
     is_heartbeat_reminder_due,
+    record_heartbeat_event,
     refresh_heartbeat_status,
     refresh_heartbeat_statuses,
 )
@@ -107,6 +112,7 @@ def test_create_heartbeat_checkin_updates_heartbeat() -> None:
 
     session = MagicMock()
     session.get.return_value = heartbeat
+    session.scalar.return_value = None
 
     request = HeartbeatCheckInCreate(
         status=CheckInStatus.WARNING,
@@ -130,7 +136,12 @@ def test_create_heartbeat_checkin_updates_heartbeat() -> None:
     assert heartbeat.next_due_at > heartbeat.last_checkin_at
     assert (heartbeat.next_due_at - heartbeat.last_checkin_at).days == 30
 
-    session.add.assert_called_once_with(checkin)
+    added_objects = [call.args[0] for call in session.add.call_args_list]
+    assert checkin in added_objects
+    assert any(
+        isinstance(item, HeartbeatEvent) and item.event_type == HeartbeatEventType.CHECKED_IN
+        for item in added_objects
+    )
     session.commit.assert_called_once()
     assert session.refresh.call_count == 2
 
@@ -681,3 +692,169 @@ def test_heartbeat_with_zero_reminder_days_has_no_advance_reminder() -> None:
         )
         is False
     )
+
+
+def test_record_heartbeat_event_creates_new_event() -> None:
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 8, 21, tzinfo=UTC),
+    )
+    occurred_at = datetime(2026, 8, 14, tzinfo=UTC)
+
+    session = MagicMock()
+    session.scalar.return_value = None
+
+    event = record_heartbeat_event(
+        session,
+        heartbeat,
+        HeartbeatEventType.REMINDER_DUE,
+        occurred_at=occurred_at,
+    )
+
+    assert event is not None
+    assert event.heartbeat_id == heartbeat.id
+    assert event.event_type == HeartbeatEventType.REMINDER_DUE
+    assert event.occurred_at == occurred_at
+    assert event.created_at == occurred_at
+    session.add.assert_called_once_with(event)
+
+
+def test_record_heartbeat_event_skips_existing_event() -> None:
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 8, 21, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.scalar.return_value = uuid4()
+
+    event = record_heartbeat_event(
+        session,
+        heartbeat,
+        HeartbeatEventType.REMINDER_DUE,
+        occurred_at=datetime(2026, 8, 14, tzinfo=UTC),
+    )
+
+    assert event is None
+    session.add.assert_not_called()
+
+
+def test_evaluate_due_heartbeats_records_reminder_event() -> None:
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 8, 21, 12, 0, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.scalar.return_value = None
+    session.query.return_value.filter.return_value.all.return_value = [
+        heartbeat,
+    ]
+
+    result = evaluate_due_heartbeats(
+        session,
+        now=datetime(2026, 8, 15, 12, 0, tzinfo=UTC),
+    )
+
+    assert result == HeartbeatEvaluationResult(
+        evaluated=1,
+        changed=0,
+    )
+
+    added_event = session.add.call_args.args[0]
+    assert isinstance(added_event, HeartbeatEvent)
+    assert added_event.event_type == HeartbeatEventType.REMINDER_DUE
+    assert added_event.occurred_at == datetime(
+        2026,
+        8,
+        14,
+        12,
+        0,
+        tzinfo=UTC,
+    )
+    session.commit.assert_called_once()
+
+
+def test_evaluate_due_heartbeats_records_overdue_event() -> None:
+    due_at = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=due_at,
+    )
+
+    session = MagicMock()
+    session.scalar.return_value = None
+    session.query.return_value.filter.return_value.all.return_value = [
+        heartbeat,
+    ]
+
+    result = evaluate_due_heartbeats(
+        session,
+        now=due_at,
+    )
+
+    assert result == HeartbeatEvaluationResult(
+        evaluated=1,
+        changed=1,
+    )
+    assert heartbeat.status == HeartbeatStatus.OVERDUE
+
+    added_event = session.add.call_args.args[0]
+    assert isinstance(added_event, HeartbeatEvent)
+    assert added_event.event_type == HeartbeatEventType.OVERDUE
+    assert added_event.occurred_at == due_at
+
+
+def test_create_heartbeat_checkin_records_checked_in_event() -> None:
+    heartbeat_id = uuid4()
+    checked_in_at = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    heartbeat = Heartbeat(
+        id=heartbeat_id,
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.OVERDUE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 1, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = heartbeat
+    session.scalar.return_value = None
+
+    checkin = create_heartbeat_checkin(
+        session,
+        heartbeat_id,
+        HeartbeatCheckInCreate(),
+        clock=lambda: checked_in_at,
+    )
+
+    assert checkin is not None
+
+    added_objects = [call.args[0] for call in session.add.call_args_list]
+    events = [item for item in added_objects if isinstance(item, HeartbeatEvent)]
+
+    assert len(events) == 1
+    assert events[0].event_type == HeartbeatEventType.CHECKED_IN
+    assert events[0].occurred_at == checked_in_at

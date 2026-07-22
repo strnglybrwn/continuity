@@ -3,7 +3,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
-from app.domain.heartbeat import CheckInStatus, HeartbeatStatus
+from app.domain.heartbeat import (
+    CheckInStatus,
+    HeartbeatEventType,
+    HeartbeatStatus,
+)
 
 
 class HeartbeatCreate(BaseModel):
@@ -49,4 +53,29 @@ class HeartbeatCheckInResponse(BaseModel):
     status: CheckInStatus
     notes: str | None
     source: str
+    created_at: datetime
+
+
+class HeartbeatEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    heartbeat_id: UUID
+    event_type: HeartbeatEventType
+    occurred_at: datetime
+    delivered_at: datetime | None
+    created_at: datetime
+
+    owner_name: str
+    owner_email: EmailStr
+
+
+class HeartbeatEventDeliveredResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    heartbeat_id: UUID
+    event_type: HeartbeatEventType
+    occurred_at: datetime
+    delivered_at: datetime
     created_at: datetime
