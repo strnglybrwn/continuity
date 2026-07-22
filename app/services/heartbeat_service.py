@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -9,6 +9,7 @@ from app.api.heartbeat_schemas import (
     HeartbeatCreate,
 )
 from app.core.clock import Clock, utc_now
+from app.core.lifecycle import lifecycle_duration
 from app.domain.heartbeat import HeartbeatStatus
 from app.persistence.models import Heartbeat, HeartbeatCheckIn
 
@@ -32,7 +33,7 @@ def create_heartbeat(
         owner_email=str(request.owner_email),
         interval_days=request.interval_days,
         reminder_days=request.reminder_days,
-        next_due_at=now + timedelta(days=request.interval_days),
+        next_due_at=now + lifecycle_duration(request.interval_days),
     )
 
     session.add(heartbeat)
@@ -187,8 +188,8 @@ def _apply_heartbeat_checkin(
 
     heartbeat.status = HeartbeatStatus.ACTIVE
     heartbeat.last_checkin_at = created_at
-    heartbeat.next_due_at = created_at + timedelta(
-        days=heartbeat.interval_days,
+    heartbeat.next_due_at = created_at + lifecycle_duration(
+        heartbeat.interval_days,
     )
 
     session.add(checkin)
