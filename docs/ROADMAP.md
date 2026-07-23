@@ -49,6 +49,10 @@ Not started or not complete:
 3. Escalation policy execution for escalation_due events.
 4. Authn/authz for API surfaces.
 
+Escalation planning reference:
+
+1. See docs/ESCALATION_MODEL_PLAN.md for phased implementation scope, contracts, and acceptance criteria.
+
 ## MVP Execution Plan (Next Step After Review)
 
 Phase 1: Wire reminder dispatch

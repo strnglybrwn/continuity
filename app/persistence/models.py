@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -53,6 +53,29 @@ class Heartbeat(Base):
     reminder_days: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
+    )
+
+    escalation_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    escalation_delay_days: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+    )
+
+    escalation_contact_name: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+    )
+
+    escalation_contact_email: Mapped[str | None] = mapped_column(
+        String(320),
+        nullable=True,
+        index=True,
     )
 
     last_checkin_at: Mapped[datetime | None] = mapped_column(

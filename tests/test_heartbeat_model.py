@@ -27,6 +27,8 @@ def test_heartbeat_defaults() -> None:
     assert heartbeat.owner_email == "scott@example.com"
     assert heartbeat.interval_days == 30
     assert heartbeat.reminder_days == 7
+    assert heartbeat.escalation_contact_name is None
+    assert heartbeat.escalation_contact_email is None
 
 
 def test_heartbeat_status_values() -> None:
@@ -48,6 +50,13 @@ def test_heartbeat_table_definition() -> None:
     assert table.c.id.primary_key is True
     assert table.c.id.default is not None
     assert table.c.owner_email.index is True
+    assert table.c.escalation_enabled.nullable is False
+    assert table.c.escalation_delay_days.nullable is False
+    assert table.c.escalation_enabled.default is not None
+    assert table.c.escalation_delay_days.default is not None
+    assert table.c.escalation_contact_name.nullable is True
+    assert table.c.escalation_contact_email.nullable is True
+    assert table.c.escalation_contact_email.index is True
     assert table.c.next_due_at.nullable is False
 
 

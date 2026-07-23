@@ -54,6 +54,10 @@ def test_create_heartbeat_uses_injected_clock() -> None:
         0,
         tzinfo=UTC,
     )
+    assert heartbeat.escalation_enabled is False
+    assert heartbeat.escalation_delay_days == 1
+    assert heartbeat.escalation_contact_name is None
+    assert heartbeat.escalation_contact_email is None
 
     session.add.assert_called_once_with(heartbeat)
     session.commit.assert_called_once()

@@ -76,6 +76,14 @@ def create_heartbeat(
         status=HeartbeatStatus.ACTIVE,
         interval_days=request.interval_days,
         reminder_days=request.reminder_days,
+        escalation_enabled=request.escalation_enabled,
+        escalation_delay_days=request.escalation_delay_days,
+        escalation_contact_name=request.escalation_contact_name,
+        escalation_contact_email=(
+            str(request.escalation_contact_email)
+            if request.escalation_contact_email is not None
+            else None
+        ),
         next_due_at=now + lifecycle_duration(request.interval_days),
     )
 
