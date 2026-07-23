@@ -37,14 +37,10 @@ def prepare_reminder_notification(
         raise ReminderNotificationPreparationError("Heartbeat event not found")
 
     if event.event_type != HeartbeatEventType.REMINDER_DUE:
-        raise ReminderNotificationPreparationError(
-            "Heartbeat event is not a reminder event"
-        )
+        raise ReminderNotificationPreparationError("Heartbeat event is not a reminder event")
 
     if event.delivered_at is not None:
-        raise ReminderNotificationPreparationError(
-            "Heartbeat event is already delivered"
-        )
+        raise ReminderNotificationPreparationError("Heartbeat event is already delivered")
 
     if not public_base_url.strip():
         raise ReminderNotificationPreparationError("public_base_url must not be empty")

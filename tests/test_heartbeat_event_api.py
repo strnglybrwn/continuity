@@ -287,9 +287,7 @@ def test_prepare_heartbeat_event_reminder_endpoint_returns_409() -> None:
 
     original = heartbeat_events.prepare_reminder_notification
     heartbeat_events.prepare_reminder_notification = MagicMock(
-        side_effect=ReminderNotificationPreparationError(
-            "Heartbeat event is already delivered"
-        )
+        side_effect=ReminderNotificationPreparationError("Heartbeat event is already delivered")
     )
 
     try:
