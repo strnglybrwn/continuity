@@ -363,7 +363,9 @@ def update_heartbeat_dashboard_settings(
         # Put due time in the near future so reminder window is active now.
         heartbeat.next_due_at = current_time + timedelta(hours=1)
     else:
-        base_time = heartbeat.last_checkin_at if heartbeat.last_checkin_at is not None else current_time
+        base_time = (
+            heartbeat.last_checkin_at if heartbeat.last_checkin_at is not None else current_time
+        )
         heartbeat.next_due_at = base_time + lifecycle_duration(interval_days)
 
     session.commit()
