@@ -76,6 +76,26 @@
             box-shadow: 0 14px 34px rgba(22, 34, 64, 0.08);
         }
 
+        .banner {
+            margin: 0.9rem 0 1rem;
+            padding: 0.8rem 0.9rem;
+            border-radius: 0.7rem;
+            border: 1px solid;
+            font-weight: 600;
+        }
+
+        .banner-success {
+            background: #def8f2;
+            border-color: #7bd9c8;
+            color: #0f5347;
+        }
+
+        .banner-error {
+            background: #ffe8e1;
+            border-color: #f0a897;
+            color: #7b2b1c;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -145,6 +165,48 @@
             padding: 0.1rem 0.4rem;
             font-size: 0.9em;
         }
+
+        .edit-form {
+            display: grid;
+            grid-template-columns: 1fr 7rem auto;
+            gap: 0.4rem;
+            margin-top: 0.5rem;
+            align-items: center;
+        }
+
+        .edit-form input[type="email"],
+        .edit-form input[type="number"] {
+            width: 100%;
+            border-radius: 0.45rem;
+            border: 1px solid var(--line);
+            padding: 0.4rem 0.45rem;
+            font: inherit;
+            color: inherit;
+            background: #ffffff;
+        }
+
+        .edit-form .arm {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .edit-form button {
+            border: 0;
+            border-radius: 0.45rem;
+            padding: 0.45rem 0.75rem;
+            background: #20355d;
+            color: #ffffff;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .edit-form button:hover {
+            background: #182946;
+        }
     </style>
 </head>
 <body>
@@ -156,6 +218,18 @@
             </div>
             <div class="stat">Total heartbeats: {{ total }}</div>
         </section>
+
+        {% if updated %}
+        <section class="banner banner-success">
+            Saved updates for heartbeat {{ updated }}.
+        </section>
+        {% endif %}
+
+        {% if error %}
+        <section class="banner banner-error">
+            {{ error }}
+        </section>
+        {% endif %}
 
         {% if rows %}
         <section class="table-wrap">
@@ -178,6 +252,15 @@
                         <td>
                             <strong>{{ row.owner_name }}</strong><br>
                             <code>{{ row.id }}</code>
+                            <form class="edit-form" method="post" action="/ui/heartbeats/{{ row.id }}">
+                                <input type="email" name="owner_email" value="{{ row.owner_email }}" required>
+                                <input type="number" name="reminder_days" min="0" max="364" value="{{ row.reminder_days }}" required>
+                                <button type="submit">Save</button>
+                                <label class="arm">
+                                    <input type="checkbox" name="arm_reminder_now" value="true">
+                                    Arm reminder due now
+                                </label>
+                            </form>
                         </td>
                         <td class="email">{{ row.owner_email }}</td>
                         <td><span class="chip">{{ row.status }}</span></td>

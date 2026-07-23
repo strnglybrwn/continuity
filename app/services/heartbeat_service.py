@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -315,3 +315,44 @@ def create_heartbeat_checkin(
     session.refresh(heartbeat)
 
     return checkin
+
+
+def update_heartbeat_dashboard_settings(
+    session: Session,
+    heartbeat_id: UUID,
+    *,
+    owner_email: str,
+    reminder_days: int,
+    arm_reminder_now: bool,
+    now: datetime | None = None,
+) -> Heartbeat | None:
+    """Update dashboard-editable heartbeat fields used for reminder testing."""
+    heartbeat = session.get(Heartbeat, heartbeat_id)
+
+    if heartbeat is None:
+        return None
+
+    if reminder_days < 0:
+        raise ValueError("reminder_days must be 0 or greater")
+
+    if reminder_days >= heartbeat.interval_days:
+        raise ValueError("reminder_days must be less than interval_days")
+
+    if arm_reminder_now and reminder_days == 0:
+        raise ValueError(
+            "Set reminder_days to at least 1 before arming reminder due now",
+        )
+
+    heartbeat.owner_email = owner_email
+    heartbeat.reminder_days = reminder_days
+
+    if arm_reminder_now:
+        current_time = now if now is not None else utc_now()
+        heartbeat.status = HeartbeatStatus.ACTIVE
+        # Put due time in the near future so reminder window is active now.
+        heartbeat.next_due_at = current_time + timedelta(hours=1)
+
+    session.commit()
+    session.refresh(heartbeat)
+
+    return heartbeat
