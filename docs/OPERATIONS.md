@@ -13,6 +13,7 @@ Current production stack components:
 1. continuity_api (FastAPI service)
 2. continuity_postgres (PostgreSQL)
 3. n8n workflow service (event orchestration and reminder workflow execution)
+4. Heartbeat verifier dashboard served by the API at /ui/heartbeats
 
 The API process may run the in-process scheduler if CONTINUITY_HEARTBEAT_SCHEDULER_ENABLED=true.
 
@@ -184,6 +185,17 @@ Implementation reference:
 - Users open GET /checkins/{token}, then explicitly confirm by POST.
 - Valid token redemption records check-in and resets heartbeat due date.
 
+4. Dashboard-based heartbeat administration
+- Operators can open GET /ui/heartbeats to view heartbeat status, due/reminder
+	timing, and queue context.
+- Per heartbeat, operators can update:
+	- owner name
+	- recipient email
+	- interval days
+	- reminder days
+- Operators can arm reminder due now to force reminder window entry for testing.
+- Validation rule: reminder_days must be less than interval_days.
+
 ## Logging and Diagnostics
 
 Application logging is configured at INFO level.
@@ -219,6 +231,13 @@ Script behavior:
 - Calls GET /heartbeat-events/metrics
 - Exits non-zero (code 3) when stale_pending_alert=true
 
+Recommended daily operator sequence:
+
+1. Run scripts/daily_reminder_healthcheck.sh.
+2. If stale alert is raised, inspect /heartbeat-events/metrics and n8n runs.
+3. Confirm scheduler evaluation with POST /heartbeat-events/evaluate-due.
+4. Verify dashboard state at /ui/heartbeats for high-priority heartbeats.
+
 ## Runbook: Stalled Reminder Processing
 
 Symptoms:
@@ -239,6 +258,33 @@ Immediate operator action:
 3. Confirm n8n workflows are running and reaching http://api:8000 successfully.
 4. Confirm n8n posts delivery acknowledgments to POST /heartbeat-events/{event_id}/delivered only after successful send.
 5. If troubleshooting from outside the Swarm network, verify n8n service availability at http://n8n.whistler.home.
+
+## Runbook: Deployed API Image Drift
+
+Symptoms:
+
+1. Migration service runs with a new image but continuity_api remains on an older digest.
+2. /health is green but expected code changes are not visible.
+
+Diagnosis commands:
+
+```bash
+docker service inspect continuity_api --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}'
+docker service ps continuity_api --no-trunc
+docker service ls --format 'table {{.Name}}\t{{.Replicas}}\t{{.Image}}' | rg '^continuity_(api|migrate|postgres)'
+```
+
+Resolution:
+
+1. Resolve the intended image digest from GHCR.
+2. Re-run deployment with digest pinning:
+
+```bash
+scripts/deploy_swarm_release.sh \
+	--image-ref ghcr.io/strnglybrwn/continuity@sha256:<digest>
+```
+
+3. Re-check continuity_api image digest and /health.
 
 ## Runbook: Check-in Link Rejected
 

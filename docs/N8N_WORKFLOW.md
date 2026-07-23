@@ -10,6 +10,7 @@ Build one n8n workflow that:
 4. Prepares reminder payload and one-time check-in URL
 5. Sends reminder email
 6. Marks event delivered only after successful send
+7. Optionally reports queue staleness from /heartbeat-events/metrics for operator alerting
 
 ## Import File
 
@@ -294,6 +295,17 @@ If desired, create a second workflow using Error Trigger:
 - failed node name
 - execution URL
 - error message
+
+## Optional Queue Health Workflow
+
+Add a lightweight scheduled workflow that:
+
+1. Calls GET /heartbeat-events/metrics?stale_after_seconds=<threshold>
+2. Evaluates stale_pending_alert
+3. Sends operator alert when true
+
+This mirrors the script behavior in scripts/daily_reminder_healthcheck.sh and helps
+keep queue health visible even if the reminder dispatch flow is temporarily paused.
 
 ## Trigger Troubleshooting (When Nothing Runs)
 

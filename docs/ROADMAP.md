@@ -33,6 +33,9 @@ Completed:
 5. Check-in confirmation web UX and one-time token redemption semantics.
 6. Event queue endpoints for pending events and delivered acknowledgment.
 7. CI pipeline for lint/test and multi-platform image publishing.
+8. Operations dashboard for heartbeat verification and inline heartbeat settings updates.
+9. Reminder queue metrics and stale alerting runbook support.
+10. Scripted Swarm deployment flow with migration-first release process.
 
 In progress:
 
@@ -55,6 +58,9 @@ Phase 1: Wire reminder dispatch
 	- for reminder_due events calls POST /heartbeat-events/{event_id}/prepare-reminder
 	- sends via configured mail transport
 	- marks event delivered only on successful send
+
+Note: production currently satisfies this phase operationally via n8n workflow orchestration
+outside this repository, but an in-repo dispatcher is still not implemented.
 
 Phase 2: Add integration testing harness
 

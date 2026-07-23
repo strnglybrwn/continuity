@@ -79,6 +79,15 @@ Supported platforms:
 
 # Docker Swarm Deployment
 
+The supported deployment entrypoint is:
+
+```bash
+scripts/deploy_swarm_release.sh --tag sha-<commit>
+```
+
+Use this script for all production deploys. It performs migration and stack
+deployment in the correct order and verifies health.
+
 The Swarm stack definition is version-controlled at
 [`deploy/stack.yml`](../deploy/stack.yml). It is the single source of truth
 for the `continuity` stack (the `api` and `postgres` services, secrets,
@@ -91,6 +100,12 @@ immutable tag produced by GitHub Actions (`sha-<commit>` or a semver tag)
 rather than relying on `latest`, so the running stack always matches a known
 commit.
 
+Important production setting:
+
+- `CONTINUITY_PUBLIC_BASE_URL` in `deploy/stack.yml` must remain
+      `https://continuity.whistler.home` so reminder check-in links in email are
+      generated with the public HTTPS host.
+
 ## First-time setup
 
 These prerequisites are created once per Swarm host and are not part of the
@@ -101,7 +116,43 @@ docker secret create continuity_postgres_password -
 docker network create --driver overlay --attachable edge
 ```
 
-## 1. Run database migrations
+## 1. Wait for CI image availability
+
+Deploy only after the GitHub Actions run for the target commit completes
+successfully and publishes the image tag.
+
+Example validation commands:
+
+```bash
+gh run list --limit 10
+gh run view <run-id> --json status,conclusion,headSha,url
+```
+
+## 2. Deploy using release script (recommended)
+
+```bash
+scripts/deploy_swarm_release.sh --tag sha-<commit>
+```
+
+What this script does:
+
+1. Resolves and validates Swarm manager context.
+2. Creates and tails a one-shot migration service using the same image.
+3. Renders a temporary stack file with a pinned API image reference.
+4. Runs `docker stack deploy` with registry auth.
+5. Verifies `/health` on the configured verify URL.
+
+## 3. Optional: Deploy by digest (for deterministic rollouts)
+
+When a tag resolves inconsistently or you need a fully deterministic rollout,
+deploy by immutable digest:
+
+```bash
+scripts/deploy_swarm_release.sh \
+      --image-ref ghcr.io/strnglybrwn/continuity@sha256:<digest>
+```
+
+## 4. Manual migration reference (fallback)
 
 Migrations are applied via a one-shot service using the same image that is
 about to be deployed, before the `api` service is updated:
@@ -130,7 +181,7 @@ docker service rm continuity_migrate
 Confirm the migration logs show a successful `alembic upgrade head` before
 proceeding.
 
-## 2. Deploy the stack
+## 5. Manual stack deploy reference (fallback)
 
 ```bash
 export CONTINUITY_IMAGE_TAG=sha-<commit>
@@ -155,6 +206,19 @@ Verify the running API.
 
 ```bash
 curl -k https://continuity.whistler.home/health
+```
+
+Verify service image digest.
+
+```bash
+docker service inspect continuity_api \
+      --format '{{.Spec.TaskTemplate.ContainerSpec.Image}}'
+```
+
+Verify rollout task state.
+
+```bash
+docker service ps continuity_api --no-trunc
 ```
 
 Verify published endpoints.
@@ -184,9 +248,31 @@ If the rolled-back version depends on a database schema that a subsequent
 migration already changed, a forward-fix migration is required; Alembic
 migrations are not automatically reversed by a service rollback.
 
+Preferred rollback path:
+
+1. Identify the previous known-good image digest.
+2. Re-run the release script with `--image-ref` for that digest.
+3. Verify `/health` and `continuity_api` task state.
+
 ---
 
 # Common Issues
+
+## image tag exists but API stays on previous digest
+
+### Cause
+
+Swarm can continue running an older image when tag resolution timing and
+rollout order do not converge exactly as expected.
+
+### Resolution
+
+Deploy by immutable digest:
+
+```bash
+scripts/deploy_swarm_release.sh \
+      --image-ref ghcr.io/strnglybrwn/continuity@sha256:<digest>
+```
 
 ## exec format error
 
@@ -209,9 +295,12 @@ Merge into `master`, allow GitHub Actions to publish the multi-platform image, t
 - [ ] GitHub Actions passed
 - [ ] Multi-platform image published
 - [ ] `CONTINUITY_IMAGE_TAG` set to the published tag (not `latest`)
+- [ ] `deploy/stack.yml` has `CONTINUITY_PUBLIC_BASE_URL=https://continuity.whistler.home`
+- [ ] Deployment executed via `scripts/deploy_swarm_release.sh`
 - [ ] Migration job run and logs confirmed clean
 - [ ] Docker Swarm stack deployed
 - [ ] Health endpoint verified
+- [ ] Deployed API digest verified via `docker service inspect`
 - [ ] OpenAPI verified
 - [ ] Smoke tests completed
 
@@ -221,5 +310,6 @@ Merge into `master`, allow GitHub Actions to publish the multi-platform image, t
 
 | Date | Change |
 |------|--------|
+| 2026-07-23 | Updated to script-first deployment workflow, digest-pinned fallback, and explicit public base URL and rollout verification guidance. |
 | 2026-07-22 | Version-controlled `deploy/stack.yml`, added pre-deploy migration job, and pinned image tag rollout. |
 | 2026-07-22 | Initial deployment guide created. |

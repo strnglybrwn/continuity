@@ -4,7 +4,7 @@
 
 This guide describes the current local development workflow for Continuity.
 
-It is focused on the implementation state on branch feature/reminder-delivery-content and should be updated as platform wiring progresses.
+It should be updated whenever application behavior, operational scripts, or deployment flow changes.
 
 Production note: event-driven reminder workflows are orchestrated by n8n in the homelab Swarm. n8n reaches the API internally at http://api:8000 and the platform is externally exposed at https://continuity.whistler.home via Caddy.
 
@@ -71,6 +71,7 @@ uvicorn app.main:app --reload
 The app serves:
 
 - API endpoints under /heartbeats and /heartbeat-events
+- heartbeat verifier dashboard under /ui/heartbeats
 - check-in web pages under /checkins/{token}
 - health endpoint at /health
 
@@ -105,6 +106,12 @@ CONTINUITY_DATABASE_PASSWORD=test-password pytest -q
 Current observation:
 
 Without a test DB password value, one API validation test may fail early during dependency setup because database configuration is resolved before request validation in that execution path.
+
+Recommended local quality gate sequence before commit:
+
+1. `ruff format .`
+2. `ruff check .`
+3. `CONTINUITY_DATABASE_PASSWORD=test-password pytest -q`
 
 ## High-Value Local Test Scenarios
 
@@ -168,3 +175,21 @@ Current integration context:
 
 1. Workflow orchestration in production is handled by n8n outside this repository.
 2. This repository currently provides the API contracts consumed by that workflow.
+
+## Build and Deploy Handoff
+
+After changes are merged/pushed to master:
+
+1. Wait for GitHub Actions workflow success and image publication.
+2. Deploy through `scripts/deploy_swarm_release.sh --tag sha-<commit>`.
+3. If rollout drifts to an older digest, redeploy with `--image-ref` and the exact digest.
+4. Verify production health (`/health`) and API service digest.
+
+## Documentation Currency Rule
+
+Any change to one of the following must include docs updates in the same change set:
+
+1. API contract or endpoint behavior
+2. Scheduler or reminder queue behavior
+3. Deployment script usage or rollout strategy
+4. Operational runbooks and healthcheck procedures

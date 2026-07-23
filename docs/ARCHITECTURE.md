@@ -13,7 +13,7 @@ The platform is currently a single FastAPI service with a PostgreSQL backing sto
 Operationally, workflow orchestration for heartbeat events is handled by an n8n instance in the homelab Docker Swarm.
 
 1. API layer
-- Exposes heartbeat CRUD-adjacent operations, event queue endpoints, and check-in confirmation pages.
+- Exposes heartbeat CRUD-adjacent operations, event queue endpoints, operations dashboard pages, and check-in confirmation pages.
 - Entry point: app/main.py
 
 2. Domain layer
@@ -89,8 +89,15 @@ Heartbeats:
 Heartbeat events queue:
 
 - GET /heartbeat-events/pending?limit=...
+- GET /heartbeat-events/metrics?stale_after_seconds=...
+- POST /heartbeat-events/evaluate-due
 - POST /heartbeat-events/{event_id}/prepare-reminder
 - POST /heartbeat-events/{event_id}/delivered
+
+Operations dashboard:
+
+- GET /ui/heartbeats
+- POST /ui/heartbeats/{heartbeat_id}
 
 Check-in web flow:
 
@@ -110,6 +117,9 @@ Implemented today:
 1. Reminder message composition is implemented with Jinja templates.
 2. Notification message structure includes channel, recipient, subject, text, and HTML body.
 3. Event queue endpoints support fetch pending events and mark delivery.
+4. Event queue metrics expose stale queue alerts for operations.
+5. Dashboard updates support operational edits of owner identity, recipient,
+   lifecycle interval/reminder windows, and reminder-window arming.
 
 Not yet wired end-to-end:
 
@@ -148,3 +158,4 @@ Current constraints:
 1. API authentication/authorization is not implemented.
 2. Check-in links are bearer-style URLs; delivery channel hardening depends on email transport implementation.
 3. Overdue/escalation delivery policy is not yet wired to a transport.
+4. Scheduler remains in-process and single-replica oriented.
