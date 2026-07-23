@@ -147,29 +147,6 @@ updates thereafter. There is no separate `docker service update --force`
 step when the tag actually changes; it is only needed to force a
 re-pull when redeploying the same tag.
 
-## Automated deployment script
-
-For repeatable deployments (including migration + stack deploy + health
-verification), use:
-
-```bash
-scripts/deploy_swarm_release.sh --tag sha-<commit>
-```
-
-To deploy a digest-pinned image directly:
-
-```bash
-scripts/deploy_swarm_release.sh \
-      --image-ref ghcr.io/strnglybrwn/continuity@sha256:<digest>
-```
-
-Example with the current published digest:
-
-```bash
-scripts/deploy_swarm_release.sh \
-      --image-ref ghcr.io/strnglybrwn/continuity@sha256:7974a9b5b230622d96d14265a93ffaae52abd1f12158ce0f274d3dbdd981d600
-```
-
 ---
 
 # Deployment Verification
@@ -244,6 +221,5 @@ Merge into `master`, allow GitHub Actions to publish the multi-platform image, t
 
 | Date | Change |
 |------|--------|
-| 2026-07-23 | Updated external verification endpoint hostname to continuity.whistler.home and aligned docs with Caddy exposure. |
 | 2026-07-22 | Version-controlled `deploy/stack.yml`, added pre-deploy migration job, and pinned image tag rollout. |
 | 2026-07-22 | Initial deployment guide created. |

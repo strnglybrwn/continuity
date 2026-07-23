@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Heartbeat Verifier | Continuity</title>
+    <style>
+        :root {
+            --ink: #1d2230;
+            --muted: #55607a;
+            --surface: #ffffff;
+            --surface-alt: #f4f8ff;
+            --line: #d2dff5;
+            --accent: #ff6b35;
+            --ok: #2a9d8f;
+            --warn: #e76f51;
+            --chip: #eef3ff;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Avenir Next", "Segoe UI", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at 10% 15%, #ffe7dc 0, transparent 30%),
+                radial-gradient(circle at 95% 0%, #d8e8ff 0, transparent 35%),
+                linear-gradient(180deg, #f7faff 0%, #eef5ff 100%);
+            min-height: 100vh;
+        }
+
+        .page {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 2rem 1rem 3rem;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: end;
+            margin-bottom: 1.2rem;
+            flex-wrap: wrap;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(1.5rem, 1.1rem + 1.8vw, 2.4rem);
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        .subtitle {
+            margin-top: 0.35rem;
+            color: var(--muted);
+            max-width: 58ch;
+        }
+
+        .stat {
+            padding: 0.7rem 0.9rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--line);
+            background: var(--surface);
+            font-weight: 700;
+        }
+
+        .table-wrap {
+            border: 1px solid var(--line);
+            border-radius: 0.9rem;
+            overflow: auto;
+            background: var(--surface);
+            box-shadow: 0 14px 34px rgba(22, 34, 64, 0.08);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 900px;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 0.8rem 0.75rem;
+            border-bottom: 1px solid var(--line);
+            vertical-align: top;
+        }
+
+        th {
+            background: var(--surface-alt);
+            font-size: 0.82rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #2f4f7c;
+        }
+
+        tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .email {
+            font-weight: 700;
+            color: #20355d;
+        }
+
+        .chip {
+            display: inline-block;
+            padding: 0.2rem 0.55rem;
+            border-radius: 999px;
+            background: var(--chip);
+            border: 1px solid var(--line);
+            font-size: 0.82rem;
+            text-transform: uppercase;
+        }
+
+        .due-true {
+            color: #ffffff;
+            background: var(--warn);
+            border-color: var(--warn);
+        }
+
+        .due-false {
+            color: #104f45;
+            background: #d8f5f1;
+            border-color: #99e0d6;
+        }
+
+        .empty {
+            margin-top: 1rem;
+            border: 1px dashed var(--line);
+            border-radius: 0.75rem;
+            background: var(--surface);
+            padding: 1rem;
+            color: var(--muted);
+        }
+
+        code {
+            background: #f2f5fb;
+            border: 1px solid #dae4f6;
+            border-radius: 0.4rem;
+            padding: 0.1rem 0.4rem;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <section class="header">
+            <div>
+                <h1>Heartbeat Verifier</h1>
+                <p class="subtitle">Use this page to confirm each heartbeat configuration, especially the destination email and whether it is currently inside the reminder window.</p>
+            </div>
+            <div class="stat">Total heartbeats: {{ total }}</div>
+        </section>
+
+        {% if rows %}
+        <section class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Owner</th>
+                        <th>Recipient email</th>
+                        <th>Status</th>
+                        <th>Interval</th>
+                        <th>Reminder</th>
+                        <th>Reminder starts</th>
+                        <th>Due at</th>
+                        <th>Reminder due now</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td>
+                            <strong>{{ row.owner_name }}</strong><br>
+                            <code>{{ row.id }}</code>
+                        </td>
+                        <td class="email">{{ row.owner_email }}</td>
+                        <td><span class="chip">{{ row.status }}</span></td>
+                        <td>{{ row.interval_days }} days</td>
+                        <td>{{ row.reminder_days }} days</td>
+                        <td>{{ row.reminder_at.isoformat() }}</td>
+                        <td>{{ row.next_due_at.isoformat() }}</td>
+                        <td>
+                            {% if row.is_reminder_due %}
+                            <span class="chip due-true">true</span>
+                            {% else %}
+                            <span class="chip due-false">false</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+        {% else %}
+        <section class="empty">
+            No heartbeats found yet. Create one with <code>POST /heartbeats</code> and refresh this page.
+        </section>
+        {% endif %}
+    </main>
+</body>
+</html>

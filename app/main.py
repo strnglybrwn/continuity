@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from app.core.clock import utc_now
 
 from app.api.checkins import router as checkin_router
+from app.api.heartbeat_dashboard import router as heartbeat_dashboard_router
 from app.api.heartbeat_events import router as heartbeat_event_router
 from app.api.heartbeats import router as heartbeat_router
 from app.config import settings
@@ -51,6 +52,7 @@ app = FastAPI(
 app.include_router(heartbeat_router)
 app.include_router(heartbeat_event_router)
 app.include_router(checkin_router)
+app.include_router(heartbeat_dashboard_router)
 
 
 @app.get("/health", tags=["system"])
