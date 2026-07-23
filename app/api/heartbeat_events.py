@@ -83,7 +83,9 @@ def evaluate_due_heartbeat_events_endpoint(
 )
 def heartbeat_event_metrics_endpoint(
     session: DatabaseSession,
-    stale_after_seconds: Annotated[int, Query(gt=0, le=604800)] = settings.heartbeat_pending_alert_seconds,
+    stale_after_seconds: Annotated[
+        int, Query(gt=0, le=604800)
+    ] = settings.heartbeat_pending_alert_seconds,
 ) -> HeartbeatEventMetricsResponse:
     metrics = get_pending_heartbeat_event_metrics(
         session,

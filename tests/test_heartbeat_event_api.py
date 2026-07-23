@@ -260,6 +260,7 @@ def test_prepare_heartbeat_event_reminder_endpoint_returns_404() -> None:
     app.dependency_overrides[get_db_session] = override_database_session
 
     from app.api import heartbeat_events
+
     original = heartbeat_events.prepare_reminder_notification
     heartbeat_events.prepare_reminder_notification = MagicMock(
         side_effect=ReminderNotificationPreparationError("Heartbeat event not found")
@@ -285,6 +286,7 @@ def test_prepare_heartbeat_event_reminder_endpoint_returns_409() -> None:
     app.dependency_overrides[get_db_session] = override_database_session
 
     from app.api import heartbeat_events
+
     original = heartbeat_events.prepare_reminder_notification
     heartbeat_events.prepare_reminder_notification = MagicMock(
         side_effect=ReminderNotificationPreparationError("Heartbeat event is already delivered")
@@ -339,9 +341,7 @@ def test_heartbeat_event_metrics_endpoint() -> None:
     )
 
     try:
-        response = TestClient(app).get(
-            "/heartbeat-events/metrics?stale_after_seconds=600"
-        )
+        response = TestClient(app).get("/heartbeat-events/metrics?stale_after_seconds=600")
     finally:
         heartbeat_events.get_pending_heartbeat_event_metrics = original
         app.dependency_overrides.clear()
