@@ -25,6 +25,7 @@ from app.services.heartbeat_service import (
     record_heartbeat_event,
     refresh_heartbeat_status,
     refresh_heartbeat_statuses,
+    update_heartbeat_dashboard_settings,
 )
 
 
@@ -160,6 +161,101 @@ def test_create_heartbeat_checkin_returns_none_when_not_found() -> None:
     assert result is None
     session.add.assert_not_called()
     session.commit.assert_not_called()
+
+
+def test_update_heartbeat_dashboard_settings_recalculates_due_at() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        last_checkin_at=datetime(2026, 7, 1, 10, 0, tzinfo=UTC),
+        next_due_at=datetime(2026, 8, 1, 10, 0, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = heartbeat
+
+    result = update_heartbeat_dashboard_settings(
+        session,
+        heartbeat.id,
+        owner_name="Zoe",
+        owner_email="zoe@example.com",
+        interval_days=14,
+        reminder_days=3,
+        arm_reminder_now=False,
+        now=now,
+    )
+
+    assert result is heartbeat
+    assert heartbeat.owner_name == "Zoe"
+    assert heartbeat.owner_email == "zoe@example.com"
+    assert heartbeat.interval_days == 14
+    assert heartbeat.reminder_days == 3
+    assert heartbeat.next_due_at == datetime(2026, 7, 15, 10, 0, tzinfo=UTC)
+    session.commit.assert_called_once()
+    session.refresh.assert_called_once_with(heartbeat)
+
+
+def test_update_heartbeat_dashboard_settings_arms_reminder_now() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.OVERDUE,
+        interval_days=30,
+        reminder_days=7,
+        last_checkin_at=datetime(2026, 7, 1, 10, 0, tzinfo=UTC),
+        next_due_at=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = heartbeat
+
+    result = update_heartbeat_dashboard_settings(
+        session,
+        heartbeat.id,
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        interval_days=30,
+        reminder_days=7,
+        arm_reminder_now=True,
+        now=now,
+    )
+
+    assert result is heartbeat
+    assert heartbeat.status == HeartbeatStatus.ACTIVE
+    assert heartbeat.next_due_at == datetime(2026, 7, 22, 13, 0, tzinfo=UTC)
+
+
+def test_update_heartbeat_dashboard_settings_rejects_invalid_reminder_window() -> None:
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 8, 1, 10, 0, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = heartbeat
+
+    with pytest.raises(ValueError, match="reminder_days must be less than interval_days"):
+        update_heartbeat_dashboard_settings(
+            session,
+            heartbeat.id,
+            owner_name="Scott",
+            owner_email="scott@example.com",
+            interval_days=5,
+            reminder_days=7,
+            arm_reminder_now=False,
+        )
 
 
 def test_active_heartbeat_becomes_overdue_after_due_time() -> None:

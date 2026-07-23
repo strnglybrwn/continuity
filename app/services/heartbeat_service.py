@@ -321,7 +321,9 @@ def update_heartbeat_dashboard_settings(
     session: Session,
     heartbeat_id: UUID,
     *,
+    owner_name: str,
     owner_email: str,
+    interval_days: int,
     reminder_days: int,
     arm_reminder_now: bool,
     now: datetime | None = None,
@@ -335,7 +337,13 @@ def update_heartbeat_dashboard_settings(
     if reminder_days < 0:
         raise ValueError("reminder_days must be 0 or greater")
 
-    if reminder_days >= heartbeat.interval_days:
+    if interval_days < 1:
+        raise ValueError("interval_days must be greater than zero")
+
+    if interval_days > 365:
+        raise ValueError("interval_days must be less than or equal to 365")
+
+    if reminder_days >= interval_days:
         raise ValueError("reminder_days must be less than interval_days")
 
     if arm_reminder_now and reminder_days == 0:
@@ -343,14 +351,20 @@ def update_heartbeat_dashboard_settings(
             "Set reminder_days to at least 1 before arming reminder due now",
         )
 
+    current_time = now if now is not None else utc_now()
+
+    heartbeat.owner_name = owner_name
     heartbeat.owner_email = owner_email
+    heartbeat.interval_days = interval_days
     heartbeat.reminder_days = reminder_days
 
     if arm_reminder_now:
-        current_time = now if now is not None else utc_now()
         heartbeat.status = HeartbeatStatus.ACTIVE
         # Put due time in the near future so reminder window is active now.
         heartbeat.next_due_at = current_time + timedelta(hours=1)
+    else:
+        base_time = heartbeat.last_checkin_at if heartbeat.last_checkin_at is not None else current_time
+        heartbeat.next_due_at = base_time + lifecycle_duration(interval_days)
 
     session.commit()
     session.refresh(heartbeat)

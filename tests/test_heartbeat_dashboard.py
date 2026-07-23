@@ -51,6 +51,7 @@ def test_heartbeat_dashboard_lists_recipient_email(monkeypatch) -> None:
     assert response.status_code == 200
     assert "Heartbeat Verifier" in response.text
     assert "scott@example.com" in response.text
+    assert "01/08/2026 10:00" in response.text
     assert "Total heartbeats: 1" in response.text
 
 
@@ -83,12 +84,16 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
         _session,
         _heartbeat_id,
         *,
+        owner_name,
         owner_email,
+        interval_days,
         reminder_days,
         arm_reminder_now,
     ):
         called["heartbeat_id"] = _heartbeat_id
+        called["owner_name"] = owner_name
         called["owner_email"] = owner_email
+        called["interval_days"] = interval_days
         called["reminder_days"] = reminder_days
         called["arm_reminder_now"] = arm_reminder_now
         heartbeat = MagicMock()
@@ -107,7 +112,9 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
         response = client.post(
             f"/ui/heartbeats/{heartbeat_id}",
             data={
+                "owner_name": "New Owner",
                 "owner_email": "new@example.com",
+                "interval_days": "10",
                 "reminder_days": "5",
                 "arm_reminder_now": "true",
             },
@@ -120,7 +127,9 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
     assert str(heartbeat_id) in response.headers["location"]
     assert called == {
         "heartbeat_id": heartbeat_id,
+        "owner_name": "New Owner",
         "owner_email": "new@example.com",
+        "interval_days": 10,
         "reminder_days": 5,
         "arm_reminder_now": True,
     }
@@ -142,7 +151,9 @@ def test_heartbeat_dashboard_update_validation_error(monkeypatch) -> None:
         response = client.post(
             f"/ui/heartbeats/{heartbeat_id}",
             data={
+                "owner_name": "New Owner",
                 "owner_email": "not-an-email",
+                "interval_days": "10",
                 "reminder_days": "5",
             },
             follow_redirects=False,

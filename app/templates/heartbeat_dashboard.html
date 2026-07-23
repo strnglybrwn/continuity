@@ -127,6 +127,25 @@
             color: #20355d;
         }
 
+        .field-stack {
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        .field-label {
+            font-size: 0.78rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .field-value {
+            font-weight: 700;
+            color: #20355d;
+            line-height: 1.2;
+        }
+
         .chip {
             display: inline-block;
             padding: 0.2rem 0.55rem;
@@ -168,10 +187,9 @@
 
         .edit-form {
             display: grid;
-            grid-template-columns: 1fr 7rem auto;
-            gap: 0.4rem;
-            margin-top: 0.5rem;
-            align-items: center;
+            grid-template-columns: 1fr;
+            gap: 0.35rem;
+            margin-top: 0.15rem;
         }
 
         .edit-form input[type="email"],
@@ -206,6 +224,10 @@
 
         .edit-form button:hover {
             background: #182946;
+        }
+
+        .actions-cell {
+            white-space: nowrap;
         }
     </style>
 </head>
@@ -248,32 +270,57 @@
                 </thead>
                 <tbody>
                     {% for row in rows %}
+                    {% set form_id = "heartbeat-settings-" ~ row.id %}
                     <tr>
                         <td>
-                            <strong>{{ row.owner_name }}</strong><br>
-                            <code>{{ row.id }}</code>
-                            <form class="edit-form" method="post" action="/ui/heartbeats/{{ row.id }}">
-                                <input type="email" name="owner_email" value="{{ row.owner_email }}" required>
-                                <input type="number" name="reminder_days" min="0" max="364" value="{{ row.reminder_days }}" required>
-                                <button type="submit">Save</button>
-                                <label class="arm">
-                                    <input type="checkbox" name="arm_reminder_now" value="true">
-                                    Arm reminder due now
-                                </label>
-                            </form>
+                            <form id="{{ form_id }}" method="post" action="/ui/heartbeats/{{ row.id }}"></form>
+                            <div class="field-stack">
+                                <span class="field-label">Owner</span>
+                                <span class="field-value">{{ row.owner_name }}</span>
+                                <code>{{ row.id }}</code>
+                                <input form="{{ form_id }}" type="text" name="owner_name" value="{{ row.owner_name }}" maxlength="200" required>
+                            </div>
                         </td>
-                        <td class="email">{{ row.owner_email }}</td>
-                        <td><span class="chip">{{ row.status }}</span></td>
-                        <td>{{ row.interval_days }} days</td>
-                        <td>{{ row.reminder_days }} days</td>
-                        <td>{{ row.reminder_at.isoformat() }}</td>
-                        <td>{{ row.next_due_at.isoformat() }}</td>
                         <td>
-                            {% if row.is_reminder_due %}
-                            <span class="chip due-true">true</span>
-                            {% else %}
-                            <span class="chip due-false">false</span>
-                            {% endif %}
+                            <div class="field-stack">
+                                <span class="field-label">Recipient email</span>
+                                <span class="field-value email">{{ row.owner_email }}</span>
+                                <input form="{{ form_id }}" type="email" name="owner_email" value="{{ row.owner_email }}" required>
+                            </div>
+                        </td>
+                        <td><span class="chip">{{ row.status }}</span></td>
+                        <td>
+                            <div class="field-stack">
+                                <span class="field-label">Interval</span>
+                                <span class="field-value">{{ row.interval_days }} days</span>
+                                <input form="{{ form_id }}" type="number" name="interval_days" min="1" max="365" value="{{ row.interval_days }}" required>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="field-stack">
+                                <span class="field-label">Reminder</span>
+                                <span class="field-value">{{ row.reminder_days }} days</span>
+                                <input form="{{ form_id }}" type="number" name="reminder_days" min="0" max="364" value="{{ row.reminder_days }}" required>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="field-stack">
+                                <span class="field-label">Reminder starts</span>
+                                <span class="field-value">{{ row.reminder_at_display }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="field-stack">
+                                <span class="field-label">Due at</span>
+                                <span class="field-value">{{ row.next_due_at_display }}</span>
+                            </div>
+                        </td>
+                        <td class="actions-cell">
+                            <button form="{{ form_id }}" type="submit">Save</button>
+                            <label class="arm">
+                                <input form="{{ form_id }}" type="checkbox" name="arm_reminder_now" value="true">
+                                Arm reminder due now
+                            </label>
                         </td>
                     </tr>
                     {% endfor %}

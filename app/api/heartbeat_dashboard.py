@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlencode
@@ -6,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationError, model_validator
 from sqlalchemy.orm import Session
 
 from app.persistence.database import get_db_session
@@ -33,9 +34,21 @@ templates = Jinja2Templates(
 class HeartbeatDashboardUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
+    owner_name: str = Field(min_length=1, max_length=200)
     owner_email: EmailStr
+    interval_days: int = Field(ge=1, le=365)
     reminder_days: int = Field(ge=0, le=364)
     arm_reminder_now: bool = False
+
+    @model_validator(mode="after")
+    def validate_reminder_less_than_interval(self) -> "HeartbeatDashboardUpdate":
+        if self.reminder_days >= self.interval_days:
+            raise ValueError("reminder_days must be less than interval_days")
+        return self
+
+
+def _format_dashboard_datetime(value: datetime | None) -> str:
+    return value.strftime("%d/%m/%Y %H:%M") if value is not None else "-"
 
 
 @router.get(
@@ -60,6 +73,12 @@ def list_heartbeats_dashboard(
                 "reminder_days": heartbeat.reminder_days,
                 "last_checkin_at": heartbeat.last_checkin_at,
                 "next_due_at": heartbeat.next_due_at,
+                "reminder_at_display": _format_dashboard_datetime(
+                    heartbeat_reminder_at(heartbeat),
+                ),
+                "next_due_at_display": _format_dashboard_datetime(
+                    heartbeat.next_due_at,
+                ),
                 "reminder_at": heartbeat_reminder_at(heartbeat),
                 "is_reminder_due": is_heartbeat_reminder_due(heartbeat),
             }
@@ -83,13 +102,17 @@ def list_heartbeats_dashboard(
 def update_heartbeat_dashboard(
     heartbeat_id: UUID,
     session: DatabaseSession,
+    owner_name: str = Form(...),
     owner_email: str = Form(...),
+    interval_days: int = Form(...),
     reminder_days: int = Form(...),
     arm_reminder_now: bool = Form(False),
 ) -> RedirectResponse:
     try:
         payload = HeartbeatDashboardUpdate(
+            owner_name=owner_name,
             owner_email=owner_email,
+            interval_days=interval_days,
             reminder_days=reminder_days,
             arm_reminder_now=arm_reminder_now,
         )
@@ -104,7 +127,9 @@ def update_heartbeat_dashboard(
         heartbeat = update_heartbeat_dashboard_settings(
             session,
             heartbeat_id,
+            owner_name=payload.owner_name,
             owner_email=str(payload.owner_email),
+            interval_days=payload.interval_days,
             reminder_days=payload.reminder_days,
             arm_reminder_now=payload.arm_reminder_now,
         )
