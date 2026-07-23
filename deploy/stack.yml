@@ -1,0 +1,128 @@
+# Deploy with:
+#   CONTINUITY_IMAGE_TAG=sha-<commit> docker stack deploy \
+#     -c deploy/stack.yml --with-registry-auth continuity
+#
+# CONTINUITY_IMAGE_TAG must reference an image already published to GHCR by
+# GitHub Actions. Never build or tag this image locally.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: continuity
+      POSTGRES_USER: continuity
+      POSTGRES_PASSWORD_FILE: /run/secrets/continuity_postgres_password
+    secrets:
+      - continuity_postgres_password
+    volumes:
+      - continuity_postgres_data:/var/lib/postgresql/data
+    networks:
+      - continuity_backend
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U continuity -d continuity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == mbpnode1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+      update_config:
+        order: stop-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        order: stop-first
+      resources:
+        reservations:
+          memory: 256M
+        limits:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    image: ghcr.io/strnglybrwn/continuity:${CONTINUITY_IMAGE_TAG:-latest}
+    environment:
+      CONTINUITY_ENVIRONMENT: production
+      CONTINUITY_HEARTBEAT_SCHEDULER_ENABLED: "true"
+      CONTINUITY_HEARTBEAT_SCHEDULER_INTERVAL_SECONDS: "300"
+      CONTINUITY_DATABASE_HOST: postgres
+      CONTINUITY_DATABASE_PORT: "5432"
+      CONTINUITY_DATABASE_NAME: continuity
+      CONTINUITY_DATABASE_USER: continuity
+      CONTINUITY_DATABASE_PASSWORD_FILE: /run/secrets/continuity_postgres_password
+    secrets:
+      - continuity_postgres_password
+    networks:
+      - continuity_backend
+      - edge
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+      update_config:
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+        max_failure_ratio: 0
+      rollback_config:
+        order: stop-first
+      resources:
+        reservations:
+          memory: 128M
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+secrets:
+  continuity_postgres_password:
+    name: continuity_postgres_password
+    external: true
+
+volumes:
+  continuity_postgres_data:
+    name: continuity_postgres_data
+
+networks:
+  continuity_backend:
+    name: continuity_backend
+    driver: overlay
+    attachable: true
+
+  edge:
+    name: edge
+    external: true

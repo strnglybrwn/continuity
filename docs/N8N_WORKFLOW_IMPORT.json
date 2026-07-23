@@ -1,0 +1,280 @@
+{
+  "name": "Continuity MVP - Reminder Dispatch",
+  "active": false,
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Trigger - Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "2",
+      "name": "HTTP - Evaluate Due Heartbeats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/evaluate-due'}}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "3",
+      "name": "HTTP - List Pending Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "GET",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/pending'}}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "={{$env.CONTINUITY_PENDING_LIMIT || 100}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "4",
+      "name": "Code - Expand Event Array",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const payload = $input.first()?.json;\n\nif (!Array.isArray(payload)) {\n  return [];\n}\n\nreturn payload.map((event) => ({ json: event }));"
+      }
+    },
+    {
+      "id": "5",
+      "name": "IF - Is Reminder Due Event",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1260,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.event_type}}",
+              "operation": "equals",
+              "value2": "reminder_due"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "6",
+      "name": "HTTP - Prepare Reminder Payload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        180
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/' + $json.id + '/prepare-reminder'}}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "7",
+      "name": "Email - Send Reminder",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1780,
+        180
+      ],
+      "parameters": {
+        "fromEmail": "={{$env.CONTINUITY_NOREPLY_FROM}}",
+        "toEmail": "={{$json.owner_email}}",
+        "subject": "={{$json.subject}}",
+        "text": "={{$json.text_body}}",
+        "html": "={{$json.html_body}}"
+      },
+      "notesInFlow": true,
+      "notes": "Attach your SMTP credentials to this node after import."
+    },
+    {
+      "id": "8",
+      "name": "HTTP - Mark Event Delivered",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2040,
+        180
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/' + $json.event_id + '/delivered'}}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "9",
+      "name": "Code - Execution Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2300,
+        180
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return [{\n  json: {\n    workflow: 'Continuity MVP - Reminder Dispatch',\n    event_id: $json.id,\n    heartbeat_id: $json.heartbeat_id,\n    delivered_at: $json.delivered_at,\n    status: 'delivered'\n  }\n}];"
+      }
+    }
+  ],
+  "connections": {
+    "Trigger - Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Evaluate Due Heartbeats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Evaluate Due Heartbeats": {
+      "main": [
+        [
+          {
+            "node": "HTTP - List Pending Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - List Pending Events": {
+      "main": [
+        [
+          {
+            "node": "Code - Expand Event Array",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Expand Event Array": {
+      "main": [
+        [
+          {
+            "node": "IF - Is Reminder Due Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Is Reminder Due Event": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Prepare Reminder Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "HTTP - Prepare Reminder Payload": {
+      "main": [
+        [
+          {
+            "node": "Email - Send Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email - Send Reminder": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Mark Event Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Mark Event Delivered": {
+      "main": [
+        [
+          {
+            "node": "Code - Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "staticData": null,
+  "tags": []
+}

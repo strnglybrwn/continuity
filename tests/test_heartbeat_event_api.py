@@ -5,6 +5,12 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.domain.heartbeat import HeartbeatEventType, HeartbeatStatus
+from app.domain.notification import (
+    Notification,
+    NotificationChannel,
+    NotificationMessage,
+    NotificationRecipient,
+)
 from app.main import app
 from app.persistence.database import get_db_session
 from app.persistence.models import Heartbeat, HeartbeatEvent
@@ -69,6 +75,38 @@ def test_list_pending_heartbeat_events_endpoint() -> None:
             "owner_email": "scott@example.com",
         }
     ]
+
+
+def test_evaluate_due_heartbeat_events_endpoint() -> None:
+    session = MagicMock()
+
+    def override_database_session():
+        yield session
+
+    app.dependency_overrides[get_db_session] = override_database_session
+
+    from app.api import heartbeat_events
+    from app.services.heartbeat_service import HeartbeatEvaluationResult
+
+    original = heartbeat_events.evaluate_due_heartbeats
+    heartbeat_events.evaluate_due_heartbeats = MagicMock(
+        return_value=HeartbeatEvaluationResult(
+            evaluated=12,
+            changed=3,
+        )
+    )
+
+    try:
+        response = TestClient(app).post("/heartbeat-events/evaluate-due")
+    finally:
+        heartbeat_events.evaluate_due_heartbeats = original
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "evaluated": 12,
+        "changed": 3,
+    }
 
 
 def test_mark_heartbeat_event_delivered_endpoint() -> None:
@@ -144,6 +182,124 @@ def test_mark_heartbeat_event_delivered_endpoint_returns_404() -> None:
     assert response.status_code == 404
     assert response.json() == {"detail": "Heartbeat event not found"}
     session.commit.assert_not_called()
+
+
+def test_prepare_heartbeat_event_reminder_endpoint() -> None:
+    heartbeat_id = uuid4()
+    event_id = uuid4()
+    occurred_at = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+
+    event = HeartbeatEvent(
+        id=event_id,
+        heartbeat_id=heartbeat_id,
+        event_type=HeartbeatEventType.REMINDER_DUE,
+        occurred_at=occurred_at,
+        created_at=occurred_at,
+    )
+
+    notification = Notification(
+        channel=NotificationChannel.EMAIL,
+        recipient=NotificationRecipient(
+            name="Scott",
+            email="scott@example.com",
+        ),
+        message=NotificationMessage(
+            template_name="heartbeat_reminder",
+            template_version=1,
+            subject="Continuity check-in reminder",
+            text_body="text reminder",
+            html_body="<p>html reminder</p>",
+        ),
+    )
+    checkin_url = "https://continuity.whistler.com/checkins/example-token"
+
+    session = MagicMock()
+
+    def override_database_session():
+        yield session
+
+    app.dependency_overrides[get_db_session] = override_database_session
+
+    from app.api import heartbeat_events
+
+    original = heartbeat_events.prepare_reminder_notification
+    heartbeat_events.prepare_reminder_notification = MagicMock(
+        return_value=(event, notification, checkin_url)
+    )
+
+    try:
+        response = TestClient(app).post(f"/heartbeat-events/{event_id}/prepare-reminder")
+    finally:
+        heartbeat_events.prepare_reminder_notification = original
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "event_id": str(event_id),
+        "heartbeat_id": str(heartbeat_id),
+        "owner_name": "Scott",
+        "owner_email": "scott@example.com",
+        "subject": "Continuity check-in reminder",
+        "text_body": "text reminder",
+        "html_body": "<p>html reminder</p>",
+        "checkin_url": checkin_url,
+    }
+
+
+def test_prepare_heartbeat_event_reminder_endpoint_returns_404() -> None:
+    event_id = uuid4()
+    session = MagicMock()
+
+    def override_database_session():
+        yield session
+
+    app.dependency_overrides[get_db_session] = override_database_session
+
+    from app.api import heartbeat_events
+    from app.services.heartbeat_event_service import ReminderNotificationPreparationError
+
+    original = heartbeat_events.prepare_reminder_notification
+    heartbeat_events.prepare_reminder_notification = MagicMock(
+        side_effect=ReminderNotificationPreparationError("Heartbeat event not found")
+    )
+
+    try:
+        response = TestClient(app).post(f"/heartbeat-events/{event_id}/prepare-reminder")
+    finally:
+        heartbeat_events.prepare_reminder_notification = original
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Heartbeat event not found"}
+
+
+def test_prepare_heartbeat_event_reminder_endpoint_returns_409() -> None:
+    event_id = uuid4()
+    session = MagicMock()
+
+    def override_database_session():
+        yield session
+
+    app.dependency_overrides[get_db_session] = override_database_session
+
+    from app.api import heartbeat_events
+    from app.services.heartbeat_event_service import ReminderNotificationPreparationError
+
+    original = heartbeat_events.prepare_reminder_notification
+    heartbeat_events.prepare_reminder_notification = MagicMock(
+        side_effect=ReminderNotificationPreparationError(
+            "Heartbeat event is already delivered"
+        )
+    )
+
+    try:
+        response = TestClient(app).post(f"/heartbeat-events/{event_id}/prepare-reminder")
+    finally:
+        heartbeat_events.prepare_reminder_notification = original
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Heartbeat event is already delivered"}
 
 
 def test_pending_heartbeat_event_limit_is_validated() -> None:

@@ -3,10 +3,18 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 from app.domain.heartbeat import HeartbeatEventType
+from app.domain.notification import (
+    Notification,
+    NotificationChannel,
+    NotificationMessage,
+    NotificationRecipient,
+)
 from app.persistence.models import HeartbeatEvent
 from app.services.heartbeat_event_service import (
     list_pending_heartbeat_events,
     mark_heartbeat_event_delivered,
+    prepare_reminder_notification,
+    ReminderNotificationPreparationError,
 )
 
 
@@ -110,3 +118,112 @@ def test_mark_heartbeat_event_delivered_returns_none_when_missing() -> None:
 
     assert result is None
     session.commit.assert_not_called()
+
+
+def test_prepare_reminder_notification_returns_send_ready_payload(
+    monkeypatch,
+) -> None:
+    event_id = uuid4()
+    heartbeat_id = uuid4()
+    event = HeartbeatEvent(
+        id=event_id,
+        heartbeat_id=heartbeat_id,
+        event_type=HeartbeatEventType.REMINDER_DUE,
+        occurred_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+        created_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+    event.heartbeat = MagicMock()
+    event.heartbeat.owner_name = "Scott"
+    event.heartbeat.owner_email = "scott@example.com"
+
+    session = MagicMock()
+    session.get.return_value = event
+
+    monkeypatch.setattr(
+        "app.services.heartbeat_event_service.issue_checkin_token",
+        MagicMock(
+            return_value=MagicMock(
+                raw_token="example-token",
+            )
+        ),
+    )
+
+    notification = Notification(
+        channel=NotificationChannel.EMAIL,
+        recipient=NotificationRecipient(
+            name="Scott",
+            email="scott@example.com",
+        ),
+        message=NotificationMessage(
+            template_name="heartbeat_reminder",
+            template_version=1,
+            subject="Continuity check-in reminder",
+            text_body="text",
+            html_body="html",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.heartbeat_event_service.build_reminder_notification",
+        MagicMock(return_value=notification),
+    )
+
+    prepared_event, prepared_notification, checkin_url = prepare_reminder_notification(
+        session,
+        event_id,
+        public_base_url="https://continuity.whistler.com",
+    )
+
+    assert prepared_event is event
+    assert prepared_notification is notification
+    assert checkin_url == "https://continuity.whistler.com/checkins/example-token"
+
+
+def test_prepare_reminder_notification_rejects_non_reminder_event() -> None:
+    event_id = uuid4()
+    event = HeartbeatEvent(
+        id=event_id,
+        heartbeat_id=uuid4(),
+        event_type=HeartbeatEventType.OVERDUE,
+        occurred_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+        created_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = event
+
+    try:
+        prepare_reminder_notification(
+            session,
+            event_id,
+            public_base_url="https://continuity.whistler.com",
+        )
+    except ReminderNotificationPreparationError as exc:
+        assert str(exc) == "Heartbeat event is not a reminder event"
+    else:
+        raise AssertionError("Expected ReminderNotificationPreparationError")
+
+
+def test_prepare_reminder_notification_rejects_delivered_event() -> None:
+    event_id = uuid4()
+    event = HeartbeatEvent(
+        id=event_id,
+        heartbeat_id=uuid4(),
+        event_type=HeartbeatEventType.REMINDER_DUE,
+        occurred_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+        delivered_at=datetime(2026, 7, 22, 13, 0, tzinfo=UTC),
+        created_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = event
+
+    try:
+        prepare_reminder_notification(
+            session,
+            event_id,
+            public_base_url="https://continuity.whistler.com",
+        )
+    except ReminderNotificationPreparationError as exc:
+        assert str(exc) == "Heartbeat event is already delivered"
+    else:
+        raise AssertionError("Expected ReminderNotificationPreparationError")

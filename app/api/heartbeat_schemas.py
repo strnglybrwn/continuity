@@ -79,3 +79,19 @@ class HeartbeatEventDeliveredResponse(BaseModel):
     occurred_at: datetime
     delivered_at: datetime
     created_at: datetime
+
+
+class HeartbeatReminderNotificationResponse(BaseModel):
+    event_id: UUID
+    heartbeat_id: UUID
+    owner_name: str
+    owner_email: EmailStr
+    subject: str
+    text_body: str
+    html_body: str
+    checkin_url: str
+
+
+class HeartbeatEventEvaluationResponse(BaseModel):
+    evaluated: int
+    changed: int
