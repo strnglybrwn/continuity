@@ -55,6 +55,7 @@ services:
     image: ghcr.io/strnglybrwn/continuity:${CONTINUITY_IMAGE_TAG:-latest}
     environment:
       CONTINUITY_ENVIRONMENT: production
+      CONTINUITY_PUBLIC_BASE_URL: http://continuity.whistler.home
       CONTINUITY_HEARTBEAT_SCHEDULER_ENABLED: "true"
       CONTINUITY_HEARTBEAT_SCHEDULER_INTERVAL_SECONDS: "300"
       CONTINUITY_DATABASE_HOST: postgres
