@@ -51,6 +51,10 @@ def test_heartbeat_dashboard_lists_recipient_email(monkeypatch) -> None:
     assert response.status_code == 200
     assert "Heartbeat Verifier" in response.text
     assert "scott@example.com" in response.text
+    assert "Lifecycle Summary" in response.text
+    assert "Timeline" in response.text
+    assert "Next Actions" in response.text
+    assert "Configurable Policy" in response.text
     assert "01/08/2026 10:00" in response.text
     assert "Total heartbeats: 1" in response.text
 
@@ -88,6 +92,10 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
         owner_email,
         interval_days,
         reminder_days,
+        escalation_enabled,
+        escalation_delay_days,
+        escalation_contact_name,
+        escalation_contact_email,
         arm_reminder_now,
     ):
         called["heartbeat_id"] = _heartbeat_id
@@ -95,6 +103,10 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
         called["owner_email"] = owner_email
         called["interval_days"] = interval_days
         called["reminder_days"] = reminder_days
+        called["escalation_enabled"] = escalation_enabled
+        called["escalation_delay_days"] = escalation_delay_days
+        called["escalation_contact_name"] = escalation_contact_name
+        called["escalation_contact_email"] = escalation_contact_email
         called["arm_reminder_now"] = arm_reminder_now
         heartbeat = MagicMock()
         heartbeat.id = heartbeat_id
@@ -116,6 +128,10 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
                 "owner_email": "new@example.com",
                 "interval_days": "10",
                 "reminder_days": "5",
+                "escalation_enabled": "true",
+                "escalation_delay_days": "3",
+                "escalation_contact_name": "Ops Lead",
+                "escalation_contact_email": "ops@example.com",
                 "arm_reminder_now": "true",
             },
             follow_redirects=False,
@@ -131,6 +147,10 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
         "owner_email": "new@example.com",
         "interval_days": 10,
         "reminder_days": 5,
+        "escalation_enabled": True,
+        "escalation_delay_days": 3,
+        "escalation_contact_name": "Ops Lead",
+        "escalation_contact_email": "ops@example.com",
         "arm_reminder_now": True,
     }
 
@@ -155,6 +175,7 @@ def test_heartbeat_dashboard_update_validation_error(monkeypatch) -> None:
                 "owner_email": "not-an-email",
                 "interval_days": "10",
                 "reminder_days": "5",
+                "escalation_delay_days": "2",
             },
             follow_redirects=False,
         )

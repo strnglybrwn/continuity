@@ -62,6 +62,15 @@ def heartbeat_reminder_at(heartbeat: Heartbeat) -> datetime:
     )
 
 
+def heartbeat_escalation_at(heartbeat: Heartbeat) -> datetime:
+    """Return when escalation should trigger for an overdue heartbeat."""
+    escalation_delay_days = heartbeat.escalation_delay_days or 1
+
+    return heartbeat.next_due_at + lifecycle_duration(
+        escalation_delay_days,
+    )
+
+
 def create_heartbeat(
     session: Session,
     request: HeartbeatCreate,
@@ -76,6 +85,14 @@ def create_heartbeat(
         status=HeartbeatStatus.ACTIVE,
         interval_days=request.interval_days,
         reminder_days=request.reminder_days,
+        escalation_enabled=request.escalation_enabled,
+        escalation_delay_days=request.escalation_delay_days,
+        escalation_contact_name=request.escalation_contact_name,
+        escalation_contact_email=(
+            str(request.escalation_contact_email)
+            if request.escalation_contact_email is not None
+            else None
+        ),
         next_due_at=now + lifecycle_duration(request.interval_days),
     )
 
@@ -102,6 +119,29 @@ def is_heartbeat_reminder_due(
     reminder_at = heartbeat_reminder_at(heartbeat)
 
     return reminder_at <= current_time < heartbeat.next_due_at
+
+
+def is_heartbeat_escalation_due(
+    heartbeat: Heartbeat,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """Return whether an overdue heartbeat should emit escalation_due."""
+    if heartbeat.status != HeartbeatStatus.OVERDUE:
+        return False
+
+    if not heartbeat.escalation_enabled:
+        return False
+
+    if not heartbeat.escalation_contact_name:
+        return False
+
+    if not heartbeat.escalation_contact_email:
+        return False
+
+    current_time = now if now is not None else utc_now()
+
+    return current_time >= heartbeat_escalation_at(heartbeat)
 
 
 def determine_heartbeat_status(
@@ -182,7 +222,15 @@ def evaluate_due_heartbeats(
     """Evaluate active heartbeats and record due lifecycle events."""
     current_time = now if now is not None else utc_now()
 
-    heartbeats = session.query(Heartbeat).filter(Heartbeat.status == HeartbeatStatus.ACTIVE).all()
+    heartbeats = (
+        session.query(Heartbeat)
+        .filter(
+            Heartbeat.status.in_(
+                [HeartbeatStatus.ACTIVE, HeartbeatStatus.OVERDUE],
+            )
+        )
+        .all()
+    )
 
     changed = 0
     events_created = 0
@@ -214,6 +262,18 @@ def evaluate_due_heartbeats(
                 heartbeat,
                 HeartbeatEventType.OVERDUE,
                 occurred_at=heartbeat.next_due_at,
+            )
+            events_created += event is not None
+
+        if is_heartbeat_escalation_due(
+            heartbeat,
+            now=current_time,
+        ):
+            event = record_heartbeat_event(
+                session,
+                heartbeat,
+                HeartbeatEventType.ESCALATION_DUE,
+                occurred_at=heartbeat_escalation_at(heartbeat),
             )
             events_created += event is not None
 
@@ -325,6 +385,10 @@ def update_heartbeat_dashboard_settings(
     owner_email: str,
     interval_days: int,
     reminder_days: int,
+    escalation_enabled: bool | None = None,
+    escalation_delay_days: int | None = None,
+    escalation_contact_name: str | None = None,
+    escalation_contact_email: str | None = None,
     arm_reminder_now: bool,
     now: datetime | None = None,
 ) -> Heartbeat | None:
@@ -346,6 +410,23 @@ def update_heartbeat_dashboard_settings(
     if reminder_days >= interval_days:
         raise ValueError("reminder_days must be less than interval_days")
 
+    if escalation_delay_days is not None:
+        if escalation_delay_days < 1:
+            raise ValueError("escalation_delay_days must be greater than zero")
+
+        if escalation_delay_days > 365:
+            raise ValueError("escalation_delay_days must be less than or equal to 365")
+
+        if escalation_delay_days > interval_days:
+            raise ValueError("escalation_delay_days must be less than or equal to interval_days")
+
+    if escalation_enabled:
+        if not escalation_contact_name:
+            raise ValueError("escalation_contact_name is required when escalation_enabled is true")
+
+        if not escalation_contact_email:
+            raise ValueError("escalation_contact_email is required when escalation_enabled is true")
+
     if arm_reminder_now and reminder_days == 0:
         raise ValueError(
             "Set reminder_days to at least 1 before arming reminder due now",
@@ -357,6 +438,19 @@ def update_heartbeat_dashboard_settings(
     heartbeat.owner_email = owner_email
     heartbeat.interval_days = interval_days
     heartbeat.reminder_days = reminder_days
+
+    if escalation_enabled is not None:
+        heartbeat.escalation_enabled = escalation_enabled
+
+    if escalation_delay_days is not None:
+        heartbeat.escalation_delay_days = escalation_delay_days
+
+    if escalation_enabled:
+        heartbeat.escalation_contact_name = escalation_contact_name
+        heartbeat.escalation_contact_email = escalation_contact_email
+    elif escalation_enabled is not None and not escalation_enabled:
+        heartbeat.escalation_contact_name = None
+        heartbeat.escalation_contact_email = None
 
     if arm_reminder_now:
         heartbeat.status = HeartbeatStatus.ACTIVE

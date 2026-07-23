@@ -15,11 +15,24 @@ class HeartbeatCreate(BaseModel):
     owner_email: EmailStr
     interval_days: int = Field(ge=1, le=365)
     reminder_days: int = Field(ge=0, le=364)
+    escalation_enabled: bool = False
+    escalation_delay_days: int = Field(default=1, ge=1, le=365)
+    escalation_contact_name: str | None = Field(default=None, min_length=1, max_length=200)
+    escalation_contact_email: EmailStr | None = None
 
     @model_validator(mode="after")
     def validate_reminder_period(self) -> "HeartbeatCreate":
         if self.reminder_days >= self.interval_days:
             raise ValueError("reminder_days must be less than interval_days")
+
+        if self.escalation_delay_days > self.interval_days:
+            raise ValueError("escalation_delay_days must be less than or equal to interval_days")
+
+        if self.escalation_enabled and not self.escalation_contact_name:
+            raise ValueError("escalation_contact_name is required when escalation_enabled is true")
+
+        if self.escalation_enabled and self.escalation_contact_email is None:
+            raise ValueError("escalation_contact_email is required when escalation_enabled is true")
 
         return self
 
@@ -33,6 +46,10 @@ class HeartbeatResponse(BaseModel):
     status: HeartbeatStatus
     interval_days: int
     reminder_days: int
+    escalation_enabled: bool
+    escalation_delay_days: int
+    escalation_contact_name: str | None
+    escalation_contact_email: EmailStr | None
     last_checkin_at: datetime | None
     next_due_at: datetime
     created_at: datetime

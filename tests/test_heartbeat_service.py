@@ -54,6 +54,10 @@ def test_create_heartbeat_uses_injected_clock() -> None:
         0,
         tzinfo=UTC,
     )
+    assert heartbeat.escalation_enabled is False
+    assert heartbeat.escalation_delay_days == 1
+    assert heartbeat.escalation_contact_name is None
+    assert heartbeat.escalation_contact_email is None
 
     session.add.assert_called_once_with(heartbeat)
     session.commit.assert_called_once()
@@ -919,6 +923,125 @@ def test_evaluate_due_heartbeats_records_overdue_event() -> None:
     assert isinstance(added_event, HeartbeatEvent)
     assert added_event.event_type == HeartbeatEventType.OVERDUE
     assert added_event.occurred_at == due_at
+
+
+def test_evaluate_due_heartbeats_emits_escalation_event_when_due(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "lifecycle_day_seconds", 60)
+
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.OVERDUE,
+        interval_days=30,
+        reminder_days=7,
+        escalation_enabled=True,
+        escalation_delay_days=1,
+        escalation_contact_name="Zoe",
+        escalation_contact_email="zoe@example.com",
+        next_due_at=now - timedelta(minutes=2),
+    )
+
+    session = MagicMock()
+    session.query.return_value.filter.return_value.all.return_value = [heartbeat]
+    session.scalar.return_value = None
+
+    result = evaluate_due_heartbeats(
+        session,
+        now=now,
+    )
+
+    assert result == HeartbeatEvaluationResult(
+        evaluated=1,
+        changed=0,
+    )
+
+    added_events = [
+        item
+        for item in (call.args[0] for call in session.add.call_args_list)
+        if isinstance(item, HeartbeatEvent)
+    ]
+    assert len(added_events) == 1
+    assert added_events[0].event_type == HeartbeatEventType.ESCALATION_DUE
+    assert added_events[0].occurred_at == heartbeat.next_due_at + timedelta(minutes=1)
+    session.commit.assert_called_once()
+
+
+def test_evaluate_due_heartbeats_deduplicates_escalation_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "lifecycle_day_seconds", 60)
+
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.OVERDUE,
+        interval_days=30,
+        reminder_days=7,
+        escalation_enabled=True,
+        escalation_delay_days=1,
+        escalation_contact_name="Zoe",
+        escalation_contact_email="zoe@example.com",
+        next_due_at=now - timedelta(minutes=2),
+    )
+
+    session = MagicMock()
+    session.query.return_value.filter.return_value.all.return_value = [heartbeat]
+    session.scalar.return_value = uuid4()
+
+    result = evaluate_due_heartbeats(
+        session,
+        now=now,
+    )
+
+    assert result == HeartbeatEvaluationResult(
+        evaluated=1,
+        changed=0,
+    )
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
+
+
+def test_evaluate_due_heartbeats_skips_escalation_without_contact(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "lifecycle_day_seconds", 60)
+
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.OVERDUE,
+        interval_days=30,
+        reminder_days=7,
+        escalation_enabled=True,
+        escalation_delay_days=1,
+        escalation_contact_name=None,
+        escalation_contact_email=None,
+        next_due_at=now - timedelta(minutes=2),
+    )
+
+    session = MagicMock()
+    session.query.return_value.filter.return_value.all.return_value = [heartbeat]
+
+    result = evaluate_due_heartbeats(
+        session,
+        now=now,
+    )
+
+    assert result == HeartbeatEvaluationResult(
+        evaluated=1,
+        changed=0,
+    )
+    session.scalar.assert_not_called()
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
 
 
 def test_create_heartbeat_checkin_records_checked_in_event() -> None:

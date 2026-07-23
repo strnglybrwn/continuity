@@ -10,9 +10,12 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationError, model_validator
 from sqlalchemy.orm import Session
 
+from app.core.clock import utc_now
 from app.persistence.database import get_db_session
 from app.services.heartbeat_service import (
+    heartbeat_escalation_at,
     heartbeat_reminder_at,
+    is_heartbeat_escalation_due,
     is_heartbeat_reminder_due,
     list_heartbeats,
     update_heartbeat_dashboard_settings,
@@ -38,17 +41,99 @@ class HeartbeatDashboardUpdate(BaseModel):
     owner_email: EmailStr
     interval_days: int = Field(ge=1, le=365)
     reminder_days: int = Field(ge=0, le=364)
+    escalation_enabled: bool = False
+    escalation_delay_days: int = Field(ge=1, le=365)
+    escalation_contact_name: str | None = Field(default=None, min_length=1, max_length=200)
+    escalation_contact_email: EmailStr | None = None
     arm_reminder_now: bool = False
 
     @model_validator(mode="after")
     def validate_reminder_less_than_interval(self) -> "HeartbeatDashboardUpdate":
         if self.reminder_days >= self.interval_days:
             raise ValueError("reminder_days must be less than interval_days")
+
+        if self.escalation_delay_days > self.interval_days:
+            raise ValueError("escalation_delay_days must be less than or equal to interval_days")
+
+        if self.escalation_enabled and not self.escalation_contact_name:
+            raise ValueError("escalation_contact_name is required when escalation_enabled is true")
+
+        if self.escalation_enabled and self.escalation_contact_email is None:
+            raise ValueError("escalation_contact_email is required when escalation_enabled is true")
         return self
 
 
 def _format_dashboard_datetime(value: datetime | None) -> str:
     return value.strftime("%d/%m/%Y %H:%M") if value is not None else "-"
+
+
+def _risk_label(
+    *,
+    status: str,
+    reminder_due: bool,
+    escalation_due: bool,
+) -> str:
+    if escalation_due:
+        return "Escalating"
+
+    if status == "overdue":
+        return "Overdue"
+
+    if reminder_due:
+        return "Reminder window"
+
+    return "On track"
+
+
+def _next_actions(
+    *,
+    status: str,
+    reminder_days: int,
+    reminder_at: datetime,
+    next_due_at: datetime,
+    escalation_enabled: bool,
+    escalation_at: datetime,
+    now: datetime,
+) -> list[dict[str, str]]:
+    actions: list[dict[str, str]] = []
+
+    if status == "active" and reminder_days > 0:
+        actions.append(
+            {
+                "label": "Send reminder",
+                "time": _format_dashboard_datetime(reminder_at),
+                "state": "pending" if reminder_at > now else "ready",
+            }
+        )
+
+    if status == "active":
+        actions.append(
+            {
+                "label": "Mark overdue",
+                "time": _format_dashboard_datetime(next_due_at),
+                "state": "pending" if next_due_at > now else "ready",
+            }
+        )
+
+    if escalation_enabled:
+        actions.append(
+            {
+                "label": "Escalation notification",
+                "time": _format_dashboard_datetime(escalation_at),
+                "state": "pending" if escalation_at > now else "ready",
+            }
+        )
+
+    if not actions:
+        actions.append(
+            {
+                "label": "No queued actions",
+                "time": "-",
+                "state": "idle",
+            }
+        )
+
+    return actions
 
 
 @router.get(
@@ -59,10 +144,16 @@ def list_heartbeats_dashboard(
     request: Request,
     session: DatabaseSession,
 ) -> HTMLResponse:
+    now = utc_now()
     heartbeats = list_heartbeats(session)
     rows: list[dict[str, Any]] = []
 
     for heartbeat in heartbeats:
+        reminder_at = heartbeat_reminder_at(heartbeat)
+        escalation_at = heartbeat_escalation_at(heartbeat)
+        reminder_due = is_heartbeat_reminder_due(heartbeat, now=now)
+        escalation_due = is_heartbeat_escalation_due(heartbeat, now=now)
+
         rows.append(
             {
                 "id": str(heartbeat.id),
@@ -71,16 +162,38 @@ def list_heartbeats_dashboard(
                 "status": heartbeat.status.value,
                 "interval_days": heartbeat.interval_days,
                 "reminder_days": heartbeat.reminder_days,
+                "escalation_enabled": bool(heartbeat.escalation_enabled),
+                "escalation_delay_days": heartbeat.escalation_delay_days or 1,
+                "escalation_contact_name": heartbeat.escalation_contact_name,
+                "escalation_contact_email": heartbeat.escalation_contact_email,
                 "last_checkin_at": heartbeat.last_checkin_at,
                 "next_due_at": heartbeat.next_due_at,
                 "reminder_at_display": _format_dashboard_datetime(
-                    heartbeat_reminder_at(heartbeat),
+                    reminder_at,
                 ),
                 "next_due_at_display": _format_dashboard_datetime(
                     heartbeat.next_due_at,
                 ),
-                "reminder_at": heartbeat_reminder_at(heartbeat),
-                "is_reminder_due": is_heartbeat_reminder_due(heartbeat),
+                "escalation_at_display": _format_dashboard_datetime(
+                    escalation_at,
+                ),
+                "reminder_at": reminder_at,
+                "is_reminder_due": reminder_due,
+                "is_escalation_due": escalation_due,
+                "risk_label": _risk_label(
+                    status=heartbeat.status.value,
+                    reminder_due=reminder_due,
+                    escalation_due=escalation_due,
+                ),
+                "next_actions": _next_actions(
+                    status=heartbeat.status.value,
+                    reminder_days=heartbeat.reminder_days,
+                    reminder_at=reminder_at,
+                    next_due_at=heartbeat.next_due_at,
+                    escalation_enabled=bool(heartbeat.escalation_enabled),
+                    escalation_at=escalation_at,
+                    now=now,
+                ),
             }
         )
 
@@ -106,14 +219,29 @@ def update_heartbeat_dashboard(
     owner_email: str = Form(...),
     interval_days: int = Form(...),
     reminder_days: int = Form(...),
+    escalation_enabled: bool = Form(False),
+    escalation_delay_days: int = Form(1),
+    escalation_contact_name: str | None = Form(None),
+    escalation_contact_email: str | None = Form(None),
     arm_reminder_now: bool = Form(False),
 ) -> RedirectResponse:
+    escalation_contact_name_normalized = (
+        escalation_contact_name.strip() if escalation_contact_name else None
+    )
+    escalation_contact_email_normalized = (
+        escalation_contact_email.strip() if escalation_contact_email else None
+    )
+
     try:
         payload = HeartbeatDashboardUpdate(
             owner_name=owner_name,
             owner_email=owner_email,
             interval_days=interval_days,
             reminder_days=reminder_days,
+            escalation_enabled=escalation_enabled,
+            escalation_delay_days=escalation_delay_days,
+            escalation_contact_name=escalation_contact_name_normalized,
+            escalation_contact_email=escalation_contact_email_normalized,
             arm_reminder_now=arm_reminder_now,
         )
     except ValidationError as exc:
@@ -131,6 +259,14 @@ def update_heartbeat_dashboard(
             owner_email=str(payload.owner_email),
             interval_days=payload.interval_days,
             reminder_days=payload.reminder_days,
+            escalation_enabled=payload.escalation_enabled,
+            escalation_delay_days=payload.escalation_delay_days,
+            escalation_contact_name=payload.escalation_contact_name,
+            escalation_contact_email=(
+                str(payload.escalation_contact_email)
+                if payload.escalation_contact_email is not None
+                else None
+            ),
             arm_reminder_now=payload.arm_reminder_now,
         )
     except ValueError as exc:
