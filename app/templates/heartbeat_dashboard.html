@@ -6,15 +6,16 @@
     <title>Heartbeat Verifier | Continuity</title>
     <style>
         :root {
-            --ink: #1d2230;
-            --muted: #55607a;
+            --ink: #142033;
+            --muted: #58657f;
             --surface: #ffffff;
-            --surface-alt: #f4f8ff;
-            --line: #d2dff5;
-            --accent: #ff6b35;
-            --ok: #2a9d8f;
-            --warn: #e76f51;
-            --chip: #eef3ff;
+            --surface-alt: #f5f8ff;
+            --line: #d4def1;
+            --accent: #f46036;
+            --ok: #1f9d8b;
+            --warn: #d64550;
+            --alert: #893de7;
+            --chip: #ecf2ff;
         }
 
         * {
@@ -33,7 +34,7 @@
         }
 
         .page {
-            max-width: 1080px;
+            max-width: 1160px;
             margin: 0 auto;
             padding: 2rem 1rem 3rem;
         }
@@ -68,12 +69,9 @@
             font-weight: 700;
         }
 
-        .table-wrap {
-            border: 1px solid var(--line);
-            border-radius: 0.9rem;
-            overflow: auto;
-            background: var(--surface);
-            box-shadow: 0 14px 34px rgba(22, 34, 64, 0.08);
+        .cards {
+            display: grid;
+            gap: 1.1rem;
         }
 
         .banner {
@@ -96,54 +94,34 @@
             color: #7b2b1c;
         }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 900px;
+        .heartbeat-card {
+            border: 1px solid var(--line);
+            border-radius: 0.9rem;
+            background: var(--surface);
+            box-shadow: 0 14px 34px rgba(22, 34, 64, 0.08);
+            overflow: hidden;
         }
 
-        th,
-        td {
-            text-align: left;
-            padding: 0.8rem 0.75rem;
-            border-bottom: 1px solid var(--line);
-            vertical-align: top;
-        }
-
-        th {
+        .card-top {
+            padding: 0.9rem 1rem;
             background: var(--surface-alt);
-            font-size: 0.82rem;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            color: #2f4f7c;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            justify-content: space-between;
+            gap: 0.8rem;
+            align-items: center;
+            flex-wrap: wrap;
         }
 
-        tr:last-child td {
-            border-bottom: 0;
+        .card-owner {
+            font-size: 1.06rem;
+            font-weight: 800;
         }
 
-        .email {
-            font-weight: 700;
-            color: #20355d;
-        }
-
-        .field-stack {
-            display: grid;
-            gap: 0.35rem;
-        }
-
-        .field-label {
-            font-size: 0.78rem;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
+        .meta {
             color: var(--muted);
-            font-weight: 700;
-        }
-
-        .field-value {
-            font-weight: 700;
-            color: #20355d;
-            line-height: 1.2;
+            font-size: 0.9rem;
+            font-weight: 600;
         }
 
         .chip {
@@ -154,18 +132,230 @@
             border: 1px solid var(--line);
             font-size: 0.82rem;
             text-transform: uppercase;
+            letter-spacing: 0.03em;
+            font-weight: 700;
         }
 
-        .due-true {
+        .risk-on-track {
+            background: #ddf8f2;
+            border-color: #a6eadf;
+            color: #146152;
+        }
+
+        .risk-reminder-window {
+            background: #ffefdb;
+            border-color: #ffd39f;
+            color: #7f4a00;
+        }
+
+        .risk-overdue {
+            background: #ffe4e7;
+            border-color: #f5b2ba;
+            color: #8d202e;
+        }
+
+        .risk-escalating {
+            background: #efe4ff;
+            border-color: #d2b7ff;
+            color: #4d1f8d;
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: minmax(320px, 1.2fr) minmax(320px, 1fr);
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .panel {
+            border: 1px solid var(--line);
+            border-radius: 0.75rem;
+            background: #fff;
+            padding: 0.9rem;
+        }
+
+        .panel h3 {
+            margin: 0 0 0.7rem;
+            font-size: 0.78rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #2f4f7c;
+            font-weight: 700;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(120px, 1fr));
+            gap: 0.7rem;
+        }
+
+        .kv {
+            display: grid;
+            gap: 0.2rem;
+        }
+
+        .kv dt {
+            color: var(--muted);
+            font-size: 0.76rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-weight: 700;
+        }
+
+        .kv dd {
+            margin: 0;
+            color: #20355d;
+            font-weight: 700;
+            line-height: 1.25;
+        }
+
+        .timeline {
+            display: grid;
+            gap: 0.55rem;
+        }
+
+        .timeline-item {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 0.7rem;
+            border: 1px solid var(--line);
+            border-radius: 0.55rem;
+            padding: 0.5rem 0.65rem;
+            background: #fbfdff;
+        }
+
+        .timeline-item strong {
+            color: #223760;
+            font-size: 0.92rem;
+        }
+
+        .timeline-item span {
+            color: var(--muted);
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        .action-list {
+            display: grid;
+            gap: 0.5rem;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .action-list li {
+            border: 1px solid var(--line);
+            border-radius: 0.55rem;
+            padding: 0.55rem 0.65rem;
+            display: flex;
+            justify-content: space-between;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .action-state {
+            font-size: 0.76rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border-radius: 999px;
+            padding: 0.12rem 0.45rem;
+            border: 1px solid var(--line);
+            background: var(--chip);
+        }
+
+        .state-ready {
+            background: #ffe3dd;
+            border-color: #f4bab0;
+            color: #8a2a1a;
+        }
+
+        .state-pending {
+            background: #ddf8f2;
+            border-color: #a6eadf;
+            color: #146152;
+        }
+
+        .state-idle {
+            background: #f2f5fb;
+            border-color: #dae4f6;
+            color: #4f607f;
+        }
+
+        .edit-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(120px, 1fr));
+            gap: 0.55rem;
+        }
+
+        .edit-field {
+            display: grid;
+            gap: 0.22rem;
+        }
+
+        .edit-field label {
+            font-size: 0.76rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .edit-grid input[type="text"],
+        .edit-grid input[type="email"],
+        .edit-grid input[type="number"] {
+            width: 100%;
+            border-radius: 0.45rem;
+            border: 1px solid var(--line);
+            padding: 0.4rem 0.45rem;
+            font: inherit;
+            color: inherit;
+            background: #ffffff;
+        }
+
+        .row-span-2 {
+            grid-column: span 2;
+        }
+
+        .toggles {
+            display: grid;
+            gap: 0.4rem;
+            margin-top: 0.7rem;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .actions {
+            margin-top: 0.8rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .actions button {
+            border: 0;
+            border-radius: 0.45rem;
+            padding: 0.5rem 0.8rem;
+            background: #20355d;
             color: #ffffff;
-            background: var(--warn);
-            border-color: var(--warn);
+            cursor: pointer;
+            font-weight: 700;
         }
 
-        .due-false {
-            color: #104f45;
-            background: #d8f5f1;
-            border-color: #99e0d6;
+        .actions button:hover {
+            background: #182946;
+        }
+
+        .heartbeat-id {
+            margin-top: 0.7rem;
+            color: #61739a;
+            font-size: 0.86rem;
+            overflow-wrap: anywhere;
         }
 
         .empty {
@@ -185,22 +375,33 @@
             font-size: 0.9em;
         }
 
-        .edit-form {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 0.35rem;
-            margin-top: 0.15rem;
+        @media (max-width: 900px) {
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .edit-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .row-span-2 {
+                grid-column: auto;
+            }
         }
 
-        .edit-form input[type="email"],
-        .edit-form input[type="number"] {
-            width: 100%;
-            border-radius: 0.45rem;
-            border: 1px solid var(--line);
-            padding: 0.4rem 0.45rem;
-            font: inherit;
-            color: inherit;
-            background: #ffffff;
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+
+        .edit-form {
+            display: block;
         }
 
         .edit-form .arm {
@@ -225,10 +426,6 @@
         .edit-form button:hover {
             background: #182946;
         }
-
-        .actions-cell {
-            white-space: nowrap;
-        }
     </style>
 </head>
 <body>
@@ -236,7 +433,7 @@
         <section class="header">
             <div>
                 <h1>Heartbeat Verifier</h1>
-                <p class="subtitle">Use this page to confirm each heartbeat configuration, especially the destination email and whether it is currently inside the reminder window.</p>
+                <p class="subtitle">Review heartbeat health, inspect the lifecycle timeline, and configure reminder and escalation policy in one place.</p>
             </div>
             <div class="stat">Total heartbeats: {{ total }}</div>
         </section>
@@ -254,78 +451,137 @@
         {% endif %}
 
         {% if rows %}
-        <section class="table-wrap">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Owner</th>
-                        <th>Recipient email</th>
-                        <th>Status</th>
-                        <th>Interval</th>
-                        <th>Reminder</th>
-                        <th>Reminder starts</th>
-                        <th>Due at</th>
-                        <th>Reminder due now</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in rows %}
-                    {% set form_id = "heartbeat-settings-" ~ row.id %}
-                    <tr>
-                        <td>
-                            <form id="{{ form_id }}" method="post" action="/ui/heartbeats/{{ row.id }}"></form>
-                            <div class="field-stack">
-                                <span class="field-label">Owner</span>
-                                <span class="field-value">{{ row.owner_name }}</span>
-                                <code>{{ row.id }}</code>
-                                <input form="{{ form_id }}" type="text" name="owner_name" value="{{ row.owner_name }}" maxlength="200" required>
+        <section class="cards">
+            {% for row in rows %}
+            {% set form_id = "heartbeat-settings-" ~ row.id %}
+            {% set risk_class = "risk-" ~ row.risk_label|lower|replace(" ", "-") %}
+            <article class="heartbeat-card">
+                <header class="card-top">
+                    <div>
+                        <div class="card-owner">{{ row.owner_name }}</div>
+                        <div class="meta">{{ row.owner_email }}</div>
+                    </div>
+                    <div>
+                        <span class="chip">{{ row.status }}</span>
+                        <span class="chip {{ risk_class }}">{{ row.risk_label }}</span>
+                    </div>
+                </header>
+
+                <div class="card-grid">
+                    <section class="panel">
+                        <h3>Lifecycle Summary</h3>
+                        <dl class="summary-grid">
+                            <div class="kv">
+                                <dt>Interval</dt>
+                                <dd>{{ row.interval_days }} days</dd>
                             </div>
-                        </td>
-                        <td>
-                            <div class="field-stack">
-                                <span class="field-label">Recipient email</span>
-                                <span class="field-value email">{{ row.owner_email }}</span>
-                                <input form="{{ form_id }}" type="email" name="owner_email" value="{{ row.owner_email }}" required>
+                            <div class="kv">
+                                <dt>Reminder Lead</dt>
+                                <dd>{{ row.reminder_days }} days</dd>
                             </div>
-                        </td>
-                        <td><span class="chip">{{ row.status }}</span></td>
-                        <td>
-                            <div class="field-stack">
-                                <span class="field-label">Interval</span>
-                                <span class="field-value">{{ row.interval_days }} days</span>
-                                <input form="{{ form_id }}" type="number" name="interval_days" min="1" max="365" value="{{ row.interval_days }}" required>
+                            <div class="kv">
+                                <dt>Reminder Starts</dt>
+                                <dd>{{ row.reminder_at_display }}</dd>
                             </div>
-                        </td>
-                        <td>
-                            <div class="field-stack">
-                                <span class="field-label">Reminder</span>
-                                <span class="field-value">{{ row.reminder_days }} days</span>
-                                <input form="{{ form_id }}" type="number" name="reminder_days" min="0" max="364" value="{{ row.reminder_days }}" required>
+                            <div class="kv">
+                                <dt>Due At</dt>
+                                <dd>{{ row.next_due_at_display }}</dd>
                             </div>
-                        </td>
-                        <td>
-                            <div class="field-stack">
-                                <span class="field-label">Reminder starts</span>
-                                <span class="field-value">{{ row.reminder_at_display }}</span>
+                            <div class="kv">
+                                <dt>Escalation</dt>
+                                <dd>{{ "Enabled" if row.escalation_enabled else "Disabled" }}</dd>
                             </div>
-                        </td>
-                        <td>
-                            <div class="field-stack">
-                                <span class="field-label">Due at</span>
-                                <span class="field-value">{{ row.next_due_at_display }}</span>
+                            <div class="kv">
+                                <dt>Escalation Starts</dt>
+                                <dd>{{ row.escalation_at_display }}</dd>
                             </div>
-                        </td>
-                        <td class="actions-cell">
-                            <button form="{{ form_id }}" type="submit">Save</button>
-                            <label class="arm">
-                                <input form="{{ form_id }}" type="checkbox" name="arm_reminder_now" value="true">
-                                Arm reminder due now
-                            </label>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        </dl>
+
+                        <h3 style="margin-top: 1rem;">Timeline</h3>
+                        <div class="timeline">
+                            <div class="timeline-item">
+                                <strong>Reminder window opens</strong>
+                                <span>{{ row.reminder_at_display }}</span>
+                            </div>
+                            <div class="timeline-item">
+                                <strong>Heartbeat due</strong>
+                                <span>{{ row.next_due_at_display }}</span>
+                            </div>
+                            <div class="timeline-item">
+                                <strong>Escalation threshold</strong>
+                                <span>{{ row.escalation_at_display }}</span>
+                            </div>
+                        </div>
+
+                        <h3 style="margin-top: 1rem;">Next Actions</h3>
+                        <ul class="action-list">
+                            {% for action in row.next_actions %}
+                            <li>
+                                <span>
+                                    <strong>{{ action.label }}</strong>
+                                    <span class="meta">{{ action.time }}</span>
+                                </span>
+                                <span class="action-state state-{{ action.state }}">{{ action.state }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+
+                        <div class="heartbeat-id">Heartbeat ID: {{ row.id }}</div>
+                    </section>
+
+                    <section class="panel">
+                        <h3>Configurable Policy</h3>
+                        <form id="{{ form_id }}" class="edit-form" method="post" action="/ui/heartbeats/{{ row.id }}">
+                            <div class="edit-grid">
+                                <div class="edit-field">
+                                    <label for="owner_name_{{ row.id }}">Owner</label>
+                                    <input id="owner_name_{{ row.id }}" type="text" name="owner_name" value="{{ row.owner_name }}" maxlength="200" required>
+                                </div>
+                                <div class="edit-field">
+                                    <label for="owner_email_{{ row.id }}">Recipient email</label>
+                                    <input id="owner_email_{{ row.id }}" type="email" name="owner_email" value="{{ row.owner_email }}" required>
+                                </div>
+                                <div class="edit-field">
+                                    <label for="interval_days_{{ row.id }}">Interval (days)</label>
+                                    <input id="interval_days_{{ row.id }}" type="number" name="interval_days" min="1" max="365" value="{{ row.interval_days }}" required>
+                                </div>
+                                <div class="edit-field">
+                                    <label for="reminder_days_{{ row.id }}">Reminder lead (days)</label>
+                                    <input id="reminder_days_{{ row.id }}" type="number" name="reminder_days" min="0" max="364" value="{{ row.reminder_days }}" required>
+                                </div>
+                                <div class="edit-field">
+                                    <label for="escalation_delay_days_{{ row.id }}">Escalation delay (days)</label>
+                                    <input id="escalation_delay_days_{{ row.id }}" type="number" name="escalation_delay_days" min="1" max="365" value="{{ row.escalation_delay_days }}" required>
+                                </div>
+                                <div class="edit-field">
+                                    <label for="escalation_contact_name_{{ row.id }}">Escalation contact name</label>
+                                    <input id="escalation_contact_name_{{ row.id }}" type="text" name="escalation_contact_name" value="{{ row.escalation_contact_name or '' }}" maxlength="200">
+                                </div>
+                                <div class="edit-field row-span-2">
+                                    <label for="escalation_contact_email_{{ row.id }}">Escalation contact email</label>
+                                    <input id="escalation_contact_email_{{ row.id }}" type="email" name="escalation_contact_email" value="{{ row.escalation_contact_email or '' }}">
+                                </div>
+                            </div>
+
+                            <div class="toggles">
+                                <label class="toggle">
+                                    <input type="checkbox" name="escalation_enabled" value="true" {% if row.escalation_enabled %}checked{% endif %}>
+                                    Enable escalation sequence
+                                </label>
+                                <label class="toggle">
+                                    <input type="checkbox" name="arm_reminder_now" value="true">
+                                    Arm reminder due now
+                                </label>
+                            </div>
+
+                            <div class="actions">
+                                <button type="submit">Save Policy</button>
+                            </div>
+                        </form>
+                    </section>
+                </div>
+            </article>
+            {% endfor %}
         </section>
         {% else %}
         <section class="empty">
