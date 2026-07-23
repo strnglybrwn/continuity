@@ -62,6 +62,13 @@ def heartbeat_reminder_at(heartbeat: Heartbeat) -> datetime:
     )
 
 
+def heartbeat_escalation_at(heartbeat: Heartbeat) -> datetime:
+    """Return when escalation should trigger for an overdue heartbeat."""
+    return heartbeat.next_due_at + lifecycle_duration(
+        heartbeat.escalation_delay_days,
+    )
+
+
 def create_heartbeat(
     session: Session,
     request: HeartbeatCreate,
@@ -110,6 +117,29 @@ def is_heartbeat_reminder_due(
     reminder_at = heartbeat_reminder_at(heartbeat)
 
     return reminder_at <= current_time < heartbeat.next_due_at
+
+
+def is_heartbeat_escalation_due(
+    heartbeat: Heartbeat,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """Return whether an overdue heartbeat should emit escalation_due."""
+    if heartbeat.status != HeartbeatStatus.OVERDUE:
+        return False
+
+    if not heartbeat.escalation_enabled:
+        return False
+
+    if not heartbeat.escalation_contact_name:
+        return False
+
+    if not heartbeat.escalation_contact_email:
+        return False
+
+    current_time = now if now is not None else utc_now()
+
+    return current_time >= heartbeat_escalation_at(heartbeat)
 
 
 def determine_heartbeat_status(
@@ -190,7 +220,15 @@ def evaluate_due_heartbeats(
     """Evaluate active heartbeats and record due lifecycle events."""
     current_time = now if now is not None else utc_now()
 
-    heartbeats = session.query(Heartbeat).filter(Heartbeat.status == HeartbeatStatus.ACTIVE).all()
+    heartbeats = (
+        session.query(Heartbeat)
+        .filter(
+            Heartbeat.status.in_(
+                [HeartbeatStatus.ACTIVE, HeartbeatStatus.OVERDUE],
+            )
+        )
+        .all()
+    )
 
     changed = 0
     events_created = 0
@@ -222,6 +260,18 @@ def evaluate_due_heartbeats(
                 heartbeat,
                 HeartbeatEventType.OVERDUE,
                 occurred_at=heartbeat.next_due_at,
+            )
+            events_created += event is not None
+
+        if is_heartbeat_escalation_due(
+            heartbeat,
+            now=current_time,
+        ):
+            event = record_heartbeat_event(
+                session,
+                heartbeat,
+                HeartbeatEventType.ESCALATION_DUE,
+                occurred_at=heartbeat_escalation_at(heartbeat),
             )
             events_created += event is not None
 
