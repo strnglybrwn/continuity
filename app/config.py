@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     application_version: str = "0.1.0"
     environment: str = "development"
 
+    public_base_url: str = "http://localhost:8000"
+
     heartbeat_scheduler_enabled: bool = False
     heartbeat_scheduler_interval_seconds: int = 300
 

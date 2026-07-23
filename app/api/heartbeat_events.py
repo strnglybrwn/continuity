@@ -5,15 +5,21 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.heartbeat_schemas import (
+    HeartbeatEventEvaluationResponse,
     HeartbeatEventDeliveredResponse,
     HeartbeatEventResponse,
+    HeartbeatReminderNotificationResponse,
 )
+from app.config import settings
 from app.persistence.database import get_db_session
 from app.persistence.models import HeartbeatEvent
 from app.services.heartbeat_event_service import (
     list_pending_heartbeat_events,
     mark_heartbeat_event_delivered,
+    prepare_reminder_notification,
+    ReminderNotificationPreparationError,
 )
+from app.services.heartbeat_service import evaluate_due_heartbeats
 
 router = APIRouter(
     prefix="/heartbeat-events",
@@ -52,6 +58,67 @@ def list_pending_heartbeat_events_endpoint(
     )
 
     return [_pending_event_response(event) for event in events]
+
+
+@router.post(
+    "/evaluate-due",
+    response_model=HeartbeatEventEvaluationResponse,
+)
+def evaluate_due_heartbeat_events_endpoint(
+    session: DatabaseSession,
+) -> HeartbeatEventEvaluationResponse:
+    result = evaluate_due_heartbeats(session)
+
+    return HeartbeatEventEvaluationResponse(
+        evaluated=result.evaluated,
+        changed=result.changed,
+    )
+
+
+@router.post(
+    "/{event_id}/prepare-reminder",
+    response_model=HeartbeatReminderNotificationResponse,
+)
+def prepare_heartbeat_event_reminder_endpoint(
+    event_id: UUID,
+    session: DatabaseSession,
+) -> HeartbeatReminderNotificationResponse:
+    try:
+        event, notification, checkin_url = prepare_reminder_notification(
+            session,
+            event_id,
+            public_base_url=settings.public_base_url,
+        )
+    except ReminderNotificationPreparationError as exc:
+        detail = str(exc)
+
+        if detail == "Heartbeat event not found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=detail,
+            ) from exc
+
+        if detail == "Heartbeat event is already delivered":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=detail,
+            ) from exc
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        ) from exc
+
+    return HeartbeatReminderNotificationResponse(
+        event_id=event.id,
+        heartbeat_id=event.heartbeat_id,
+        owner_name=notification.recipient.name,
+        owner_email=notification.recipient.email,
+        subject=notification.message.subject,
+        text_body=notification.message.text_body,
+        html_body=notification.message.html_body,
+        checkin_url=checkin_url,
+    )
 
 
 @router.post(
