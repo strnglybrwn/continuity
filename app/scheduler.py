@@ -1,7 +1,9 @@
 import asyncio
 import logging
 
+from app.config import settings
 from app.persistence.database import create_db_session as SessionLocal
+from app.services.heartbeat_event_service import get_pending_heartbeat_event_metrics
 from app.services.heartbeat_service import (
     HeartbeatEvaluationResult,
     evaluate_due_heartbeats,
@@ -15,7 +17,22 @@ def run_heartbeat_evaluation() -> HeartbeatEvaluationResult:
     session = SessionLocal()
 
     try:
-        return evaluate_due_heartbeats(session)
+        result = evaluate_due_heartbeats(session)
+
+        metrics = get_pending_heartbeat_event_metrics(
+            session,
+            stale_after_seconds=settings.heartbeat_pending_alert_seconds,
+        )
+
+        if metrics.stale_pending_alert:
+            logger.warning(
+                "Stale pending reminder events detected: stale=%d threshold_seconds=%d oldest_age_seconds=%s",
+                metrics.stale_reminder_due_total,
+                settings.heartbeat_pending_alert_seconds,
+                metrics.oldest_pending_age_seconds,
+            )
+
+        return result
     except Exception:
         session.rollback()
         raise

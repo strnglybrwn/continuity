@@ -14,6 +14,10 @@ from app.domain.notification import (
 from app.main import app
 from app.persistence.database import get_db_session
 from app.persistence.models import Heartbeat, HeartbeatEvent
+from app.services.heartbeat_event_service import (
+    HeartbeatPendingMetrics,
+    ReminderNotificationPreparationError,
+)
 
 
 def test_list_pending_heartbeat_events_endpoint() -> None:
@@ -256,8 +260,6 @@ def test_prepare_heartbeat_event_reminder_endpoint_returns_404() -> None:
     app.dependency_overrides[get_db_session] = override_database_session
 
     from app.api import heartbeat_events
-    from app.services.heartbeat_event_service import ReminderNotificationPreparationError
-
     original = heartbeat_events.prepare_reminder_notification
     heartbeat_events.prepare_reminder_notification = MagicMock(
         side_effect=ReminderNotificationPreparationError("Heartbeat event not found")
@@ -283,8 +285,6 @@ def test_prepare_heartbeat_event_reminder_endpoint_returns_409() -> None:
     app.dependency_overrides[get_db_session] = override_database_session
 
     from app.api import heartbeat_events
-    from app.services.heartbeat_event_service import ReminderNotificationPreparationError
-
     original = heartbeat_events.prepare_reminder_notification
     heartbeat_events.prepare_reminder_notification = MagicMock(
         side_effect=ReminderNotificationPreparationError("Heartbeat event is already delivered")
@@ -301,6 +301,74 @@ def test_prepare_heartbeat_event_reminder_endpoint_returns_409() -> None:
 
 
 def test_pending_heartbeat_event_limit_is_validated() -> None:
-    response = TestClient(app).get("/heartbeat-events/pending?limit=0")
+    session = MagicMock()
+
+    def override_database_session():
+        yield session
+
+    app.dependency_overrides[get_db_session] = override_database_session
+
+    try:
+        response = TestClient(app).get("/heartbeat-events/pending?limit=0")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+def test_heartbeat_event_metrics_endpoint() -> None:
+    session = MagicMock()
+
+    def override_database_session():
+        yield session
+
+    app.dependency_overrides[get_db_session] = override_database_session
+
+    from app.api import heartbeat_events
+
+    original = heartbeat_events.get_pending_heartbeat_event_metrics
+    heartbeat_events.get_pending_heartbeat_event_metrics = MagicMock(
+        return_value=HeartbeatPendingMetrics(
+            pending_total=4,
+            pending_reminder_due_total=3,
+            oldest_pending_occurred_at=datetime(2026, 7, 23, 10, 0, tzinfo=UTC),
+            oldest_pending_age_seconds=900,
+            stale_pending_alert=True,
+            stale_reminder_due_total=1,
+        )
+    )
+
+    try:
+        response = TestClient(app).get(
+            "/heartbeat-events/metrics?stale_after_seconds=600"
+        )
+    finally:
+        heartbeat_events.get_pending_heartbeat_event_metrics = original
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "pending_total": 4,
+        "pending_reminder_due_total": 3,
+        "oldest_pending_occurred_at": "2026-07-23T10:00:00Z",
+        "oldest_pending_age_seconds": 900,
+        "stale_pending_alert": True,
+        "stale_reminder_due_total": 1,
+        "stale_after_seconds": 600,
+    }
+
+
+def test_heartbeat_event_metrics_threshold_is_validated() -> None:
+    session = MagicMock()
+
+    def override_database_session():
+        yield session
+
+    app.dependency_overrides[get_db_session] = override_database_session
+
+    try:
+        response = TestClient(app).get("/heartbeat-events/metrics?stale_after_seconds=0")
+    finally:
+        app.dependency_overrides.clear()
 
     assert response.status_code == 422

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.heartbeat_schemas import (
     HeartbeatEventEvaluationResponse,
     HeartbeatEventDeliveredResponse,
+    HeartbeatEventMetricsResponse,
     HeartbeatEventResponse,
     HeartbeatReminderNotificationResponse,
 )
@@ -14,6 +15,7 @@ from app.config import settings
 from app.persistence.database import get_db_session
 from app.persistence.models import HeartbeatEvent
 from app.services.heartbeat_event_service import (
+    get_pending_heartbeat_event_metrics,
     list_pending_heartbeat_events,
     mark_heartbeat_event_delivered,
     prepare_reminder_notification,
@@ -72,6 +74,30 @@ def evaluate_due_heartbeat_events_endpoint(
     return HeartbeatEventEvaluationResponse(
         evaluated=result.evaluated,
         changed=result.changed,
+    )
+
+
+@router.get(
+    "/metrics",
+    response_model=HeartbeatEventMetricsResponse,
+)
+def heartbeat_event_metrics_endpoint(
+    session: DatabaseSession,
+    stale_after_seconds: Annotated[int, Query(gt=0, le=604800)] = settings.heartbeat_pending_alert_seconds,
+) -> HeartbeatEventMetricsResponse:
+    metrics = get_pending_heartbeat_event_metrics(
+        session,
+        stale_after_seconds=stale_after_seconds,
+    )
+
+    return HeartbeatEventMetricsResponse(
+        pending_total=metrics.pending_total,
+        pending_reminder_due_total=metrics.pending_reminder_due_total,
+        oldest_pending_occurred_at=metrics.oldest_pending_occurred_at,
+        oldest_pending_age_seconds=metrics.oldest_pending_age_seconds,
+        stale_pending_alert=metrics.stale_pending_alert,
+        stale_reminder_due_total=metrics.stale_reminder_due_total,
+        stale_after_seconds=stale_after_seconds,
     )
 
 

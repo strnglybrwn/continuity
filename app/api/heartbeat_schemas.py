@@ -95,3 +95,13 @@ class HeartbeatReminderNotificationResponse(BaseModel):
 class HeartbeatEventEvaluationResponse(BaseModel):
     evaluated: int
     changed: int
+
+
+class HeartbeatEventMetricsResponse(BaseModel):
+    pending_total: int
+    pending_reminder_due_total: int
+    oldest_pending_occurred_at: datetime | None
+    oldest_pending_age_seconds: int | None
+    stale_pending_alert: bool
+    stale_reminder_due_total: int
+    stale_after_seconds: int

@@ -1,6 +1,8 @@
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.clock import Clock, utc_now
@@ -13,6 +15,16 @@ from app.services.notification_service import build_reminder_notification
 
 class ReminderNotificationPreparationError(ValueError):
     """Raised when a heartbeat event cannot be prepared for reminder delivery."""
+
+
+@dataclass(frozen=True, slots=True)
+class HeartbeatPendingMetrics:
+    pending_total: int
+    pending_reminder_due_total: int
+    oldest_pending_occurred_at: datetime | None
+    oldest_pending_age_seconds: int | None
+    stale_pending_alert: bool
+    stale_reminder_due_total: int
 
 
 def _build_checkin_url(*, public_base_url: str, raw_token: str) -> str:
@@ -82,6 +94,67 @@ def list_pending_heartbeat_events(
         )
         .limit(limit)
         .all()
+    )
+
+
+def get_pending_heartbeat_event_metrics(
+    session: Session,
+    *,
+    stale_after_seconds: int,
+    now: datetime | None = None,
+) -> HeartbeatPendingMetrics:
+    """Return queue metrics and stale reminder alert information."""
+    if stale_after_seconds <= 0:
+        raise ValueError("stale_after_seconds must be greater than zero")
+
+    current_time = now if now is not None else utc_now()
+    stale_cutoff = datetime.fromtimestamp(
+        current_time.timestamp() - stale_after_seconds,
+        tz=current_time.tzinfo,
+    )
+
+    pending_total = (
+        session.query(func.count(HeartbeatEvent.id))
+        .filter(HeartbeatEvent.delivered_at.is_(None))
+        .scalar()
+        or 0
+    )
+
+    pending_reminder_due_total = (
+        session.query(func.count(HeartbeatEvent.id))
+        .filter(HeartbeatEvent.delivered_at.is_(None))
+        .filter(HeartbeatEvent.event_type == HeartbeatEventType.REMINDER_DUE)
+        .scalar()
+        or 0
+    )
+
+    oldest_pending_occurred_at = (
+        session.query(func.min(HeartbeatEvent.occurred_at))
+        .filter(HeartbeatEvent.delivered_at.is_(None))
+        .scalar()
+    )
+
+    stale_reminder_due_total = (
+        session.query(func.count(HeartbeatEvent.id))
+        .filter(HeartbeatEvent.delivered_at.is_(None))
+        .filter(HeartbeatEvent.event_type == HeartbeatEventType.REMINDER_DUE)
+        .filter(HeartbeatEvent.occurred_at <= stale_cutoff)
+        .scalar()
+        or 0
+    )
+
+    oldest_pending_age_seconds: int | None = None
+    if oldest_pending_occurred_at is not None:
+        age_seconds = int((current_time - oldest_pending_occurred_at).total_seconds())
+        oldest_pending_age_seconds = max(age_seconds, 0)
+
+    return HeartbeatPendingMetrics(
+        pending_total=int(pending_total),
+        pending_reminder_due_total=int(pending_reminder_due_total),
+        oldest_pending_occurred_at=oldest_pending_occurred_at,
+        oldest_pending_age_seconds=oldest_pending_age_seconds,
+        stale_pending_alert=stale_reminder_due_total > 0,
+        stale_reminder_due_total=int(stale_reminder_due_total),
     )
 
 

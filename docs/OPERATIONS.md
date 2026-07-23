@@ -47,10 +47,22 @@ Swarm service healthcheck also probes /health locally inside the API container.
 
 2. Pending events queue
 - Consumers can fetch undelivered events from GET /heartbeat-events/pending.
+- Operators can inspect queue health from GET /heartbeat-events/metrics.
 - For reminder events, n8n calls POST /heartbeat-events/{event_id}/prepare-reminder to obtain a one-time check-in URL and send-ready email content.
 - Consumers should call POST /heartbeat-events/{event_id}/delivered after successful handling.
 - In production, this consumer/orchestrator role is implemented by n8n workflows.
 - An empty response from /heartbeat-events/pending means there are currently no undelivered lifecycle events, not necessarily that no heartbeats exist.
+
+Metrics response highlights:
+
+- pending_total
+- pending_reminder_due_total
+- oldest_pending_occurred_at
+- oldest_pending_age_seconds
+- stale_pending_alert
+- stale_reminder_due_total
+
+stale_pending_alert is computed from stale_after_seconds (default from CONTINUITY_HEARTBEAT_PENDING_ALERT_SECONDS).
 
 Expected n8n reminder sequence:
 
@@ -188,6 +200,24 @@ docker service ps continuity_api
 docker service logs continuity_api
 docker service logs continuity_postgres
 ```
+
+Daily reminder queue smoke/alert check:
+
+```bash
+scripts/daily_reminder_healthcheck.sh
+```
+
+Environment overrides:
+
+- CONTINUITY_BASE_URL (default: https://continuity.whistler.home)
+- CONTINUITY_STALE_AFTER_SECONDS (default: 3600)
+- CONTINUITY_EVALUATE_FIRST (default: true)
+
+Script behavior:
+
+- Calls POST /heartbeat-events/evaluate-due (optional)
+- Calls GET /heartbeat-events/metrics
+- Exits non-zero (code 3) when stale_pending_alert=true
 
 ## Runbook: Stalled Reminder Processing
 

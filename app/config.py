@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     heartbeat_scheduler_enabled: bool = False
     heartbeat_scheduler_interval_seconds: int = 300
+    heartbeat_pending_alert_seconds: int = Field(default=3_600, gt=0)
 
     lifecycle_day_seconds: int = Field(default=86_400, gt=0)
 
