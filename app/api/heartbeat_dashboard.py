@@ -10,9 +10,12 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationError, model_validator
 from sqlalchemy.orm import Session
 
+from app.api.heartbeat_schemas import HeartbeatCreate
 from app.core.clock import utc_now
 from app.persistence.database import get_db_session
 from app.services.heartbeat_service import (
+    create_heartbeat,
+    delete_heartbeat,
     heartbeat_escalation_at,
     heartbeat_reminder_at,
     is_heartbeat_escalation_due,
@@ -100,7 +103,7 @@ def _next_actions(
     if status == "active" and reminder_days > 0:
         actions.append(
             {
-                "label": "Send reminder",
+                "label": "Send reminder to owner",
                 "time": _format_dashboard_datetime(reminder_at),
                 "state": "pending" if reminder_at > now else "ready",
             }
@@ -109,7 +112,7 @@ def _next_actions(
     if status == "active":
         actions.append(
             {
-                "label": "Mark overdue",
+                "label": "Send overdue warning to owner",
                 "time": _format_dashboard_datetime(next_due_at),
                 "state": "pending" if next_due_at > now else "ready",
             }
@@ -118,7 +121,7 @@ def _next_actions(
     if escalation_enabled:
         actions.append(
             {
-                "label": "Escalation notification",
+                "label": "Send escalation notice to contact",
                 "time": _format_dashboard_datetime(escalation_at),
                 "state": "pending" if escalation_at > now else "ready",
             }
@@ -204,8 +207,78 @@ def list_heartbeats_dashboard(
             "rows": rows,
             "total": len(rows),
             "updated": request.query_params.get("updated"),
+            "created": request.query_params.get("created"),
+            "deleted": request.query_params.get("deleted"),
             "error": request.query_params.get("error"),
         },
+    )
+
+
+@router.post(
+    "/heartbeats",
+)
+def create_heartbeat_dashboard(
+    session: DatabaseSession,
+    owner_name: str = Form(...),
+    owner_email: str = Form(...),
+    interval_days: int = Form(...),
+    reminder_days: int = Form(...),
+    escalation_enabled: bool = Form(False),
+    escalation_delay_days: int = Form(1),
+    escalation_contact_name: str | None = Form(None),
+    escalation_contact_email: str | None = Form(None),
+) -> RedirectResponse:
+    escalation_contact_name_normalized = (
+        escalation_contact_name.strip() if escalation_contact_name else None
+    )
+    escalation_contact_email_normalized = (
+        escalation_contact_email.strip() if escalation_contact_email else None
+    )
+
+    try:
+        payload = HeartbeatCreate(
+            owner_name=owner_name,
+            owner_email=owner_email,
+            interval_days=interval_days,
+            reminder_days=reminder_days,
+            escalation_enabled=escalation_enabled,
+            escalation_delay_days=escalation_delay_days,
+            escalation_contact_name=escalation_contact_name_normalized,
+            escalation_contact_email=escalation_contact_email_normalized,
+        )
+    except ValidationError as exc:
+        message = exc.errors()[0]["msg"]
+        return RedirectResponse(
+            url=f"/ui/heartbeats?{urlencode({'error': message})}",
+            status_code=303,
+        )
+
+    heartbeat = create_heartbeat(session, payload)
+
+    return RedirectResponse(
+        url=f"/ui/heartbeats?{urlencode({'created': str(heartbeat.id)})}",
+        status_code=303,
+    )
+
+
+@router.post(
+    "/heartbeats/{heartbeat_id}/delete",
+)
+def delete_heartbeat_dashboard(
+    heartbeat_id: UUID,
+    session: DatabaseSession,
+) -> RedirectResponse:
+    deleted = delete_heartbeat(session, heartbeat_id)
+
+    if not deleted:
+        return RedirectResponse(
+            url=f"/ui/heartbeats?{urlencode({'error': 'Heartbeat not found'})}",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url=f"/ui/heartbeats?{urlencode({'deleted': str(heartbeat_id)})}",
+        status_code=303,
     )
 
 

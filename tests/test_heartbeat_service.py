@@ -19,6 +19,7 @@ from app.services.heartbeat_service import (
     HeartbeatEvaluationResult,
     create_heartbeat,
     create_heartbeat_checkin,
+    delete_heartbeat,
     determine_heartbeat_status,
     evaluate_due_heartbeats,
     is_heartbeat_reminder_due,
@@ -1077,3 +1078,37 @@ def test_create_heartbeat_checkin_records_checked_in_event() -> None:
     assert len(events) == 1
     assert events[0].event_type == HeartbeatEventType.CHECKED_IN
     assert events[0].occurred_at == checked_in_at
+
+
+def test_delete_heartbeat_removes_existing_heartbeat() -> None:
+    heartbeat_id = uuid4()
+    heartbeat = Heartbeat(
+        id=heartbeat_id,
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 8, 1, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = heartbeat
+
+    result = delete_heartbeat(session, heartbeat_id)
+
+    assert result is True
+    session.delete.assert_called_once_with(heartbeat)
+    session.commit.assert_called_once()
+
+
+def test_delete_heartbeat_returns_false_when_not_found() -> None:
+    heartbeat_id = uuid4()
+    session = MagicMock()
+    session.get.return_value = None
+
+    result = delete_heartbeat(session, heartbeat_id)
+
+    assert result is False
+    session.delete.assert_not_called()
+    session.commit.assert_not_called()

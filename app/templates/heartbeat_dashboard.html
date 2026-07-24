@@ -351,6 +351,14 @@
             background: #182946;
         }
 
+        .actions button.btn-danger {
+            background: var(--warn);
+        }
+
+        .actions button.btn-danger:hover {
+            background: #a5333f;
+        }
+
         .heartbeat-id {
             margin-top: 0.7rem;
             color: #61739a;
@@ -444,11 +452,79 @@
         </section>
         {% endif %}
 
+        {% if created %}
+        <section class="banner banner-success">
+            Created heartbeat {{ created }}.
+        </section>
+        {% endif %}
+
+        {% if deleted %}
+        <section class="banner banner-success">
+            Deleted heartbeat {{ deleted }}.
+        </section>
+        {% endif %}
+
         {% if error %}
         <section class="banner banner-error">
             {{ error }}
         </section>
         {% endif %}
+
+        <section class="heartbeat-card create-card">
+            <header class="card-top">
+                <div>
+                    <div class="card-owner">Add New Heartbeat</div>
+                    <div class="meta">Create a heartbeat and configure its reminder and escalation policy.</div>
+                </div>
+            </header>
+            <div class="card-grid" style="grid-template-columns: 1fr;">
+                <section class="panel">
+                    <form class="edit-form" method="post" action="/ui/heartbeats">
+                        <div class="edit-grid">
+                            <div class="edit-field">
+                                <label for="new_owner_name">Owner</label>
+                                <input id="new_owner_name" type="text" name="owner_name" maxlength="200" required>
+                            </div>
+                            <div class="edit-field">
+                                <label for="new_owner_email">Recipient email</label>
+                                <input id="new_owner_email" type="email" name="owner_email" required>
+                            </div>
+                            <div class="edit-field">
+                                <label for="new_interval_days">Interval (days)</label>
+                                <input id="new_interval_days" type="number" name="interval_days" min="1" max="365" value="30" required>
+                            </div>
+                            <div class="edit-field">
+                                <label for="new_reminder_days">Reminder lead (days)</label>
+                                <input id="new_reminder_days" type="number" name="reminder_days" min="0" max="364" value="7" required>
+                            </div>
+                            <div class="edit-field">
+                                <label for="new_escalation_delay_days">Escalation delay (days)</label>
+                                <input id="new_escalation_delay_days" type="number" name="escalation_delay_days" min="1" max="365" value="1" required>
+                            </div>
+                            <div class="edit-field">
+                                <label for="new_escalation_contact_name">Escalation contact name</label>
+                                <input id="new_escalation_contact_name" type="text" name="escalation_contact_name" maxlength="200">
+                            </div>
+                            <div class="edit-field row-span-2">
+                                <label for="new_escalation_contact_email">Escalation contact email</label>
+                                <input id="new_escalation_contact_email" type="email" name="escalation_contact_email">
+                            </div>
+                        </div>
+
+                        <div class="toggles">
+                            <label class="toggle">
+                                <input type="checkbox" name="escalation_enabled" value="true">
+                                Enable escalation sequence
+                            </label>
+                        </div>
+
+                        <div class="actions">
+                            <button type="submit">Create Heartbeat</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+        </section>
 
         {% if rows %}
         <section class="cards">
@@ -500,15 +576,15 @@
                         <h3 style="margin-top: 1rem;">Timeline</h3>
                         <div class="timeline">
                             <div class="timeline-item">
-                                <strong>Reminder window opens</strong>
+                                <strong>Reminder sent to owner</strong>
                                 <span>{{ row.reminder_at_display }}</span>
                             </div>
                             <div class="timeline-item">
-                                <strong>Heartbeat due</strong>
+                                <strong>Heartbeat due / overdue warning sent to owner</strong>
                                 <span>{{ row.next_due_at_display }}</span>
                             </div>
                             <div class="timeline-item">
-                                <strong>Escalation threshold</strong>
+                                <strong>Escalation notice sent to contact</strong>
                                 <span>{{ row.escalation_at_display }}</span>
                             </div>
                         </div>
@@ -576,6 +652,12 @@
 
                             <div class="actions">
                                 <button type="submit">Save Policy</button>
+                            </div>
+                        </form>
+
+                        <form method="post" action="/ui/heartbeats/{{ row.id }}/delete" onsubmit="return confirm('Delete this heartbeat permanently? This cannot be undone.');" style="margin-top: 0.6rem;">
+                            <div class="actions">
+                                <button type="submit" class="btn-danger">Delete Heartbeat</button>
                             </div>
                         </form>
                     </section>
