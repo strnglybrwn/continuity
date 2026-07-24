@@ -11,8 +11,12 @@ from app.domain.notification import (
 )
 from app.persistence.models import HeartbeatEvent
 from app.services.heartbeat_event_service import (
+    EscalationNotificationPreparationError,
     list_pending_heartbeat_events,
     mark_heartbeat_event_delivered,
+    OverdueNotificationPreparationError,
+    prepare_escalation_notification,
+    prepare_overdue_notification,
     prepare_reminder_notification,
     ReminderNotificationPreparationError,
 )
@@ -227,3 +231,305 @@ def test_prepare_reminder_notification_rejects_delivered_event() -> None:
         assert str(exc) == "Heartbeat event is already delivered"
     else:
         raise AssertionError("Expected ReminderNotificationPreparationError")
+
+
+def test_prepare_overdue_notification_returns_send_ready_payload(
+    monkeypatch,
+) -> None:
+    event_id = uuid4()
+    heartbeat_id = uuid4()
+    event = HeartbeatEvent(
+        id=event_id,
+        heartbeat_id=heartbeat_id,
+        event_type=HeartbeatEventType.OVERDUE,
+        occurred_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+        created_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+    event.heartbeat = MagicMock()
+    event.heartbeat.owner_name = "Scott"
+    event.heartbeat.owner_email = "scott@example.com"
+    event.heartbeat.escalation_enabled = True
+    event.heartbeat.escalation_contact_name = "Jamie"
+    event.heartbeat.escalation_contact_email = "jamie@example.com"
+
+    session = MagicMock()
+    session.get.return_value = event
+
+    monkeypatch.setattr(
+        "app.services.heartbeat_event_service.issue_checkin_token",
+        MagicMock(
+            return_value=MagicMock(
+                raw_token="example-token",
+            )
+        ),
+    )
+
+    escalation_at = datetime(2026, 7, 23, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr(
+        "app.services.heartbeat_event_service.heartbeat_escalation_at",
+        MagicMock(return_value=escalation_at),
+    )
+
+    notification = Notification(
+        channel=NotificationChannel.EMAIL,
+        recipient=NotificationRecipient(
+            name="Scott",
+            email="scott@example.com",
+        ),
+        message=NotificationMessage(
+            template_name="heartbeat_overdue_warning",
+            template_version=1,
+            subject="Continuity check-in overdue",
+            text_body="text",
+            html_body="html",
+        ),
+    )
+    build_notification = MagicMock(return_value=notification)
+    monkeypatch.setattr(
+        "app.services.heartbeat_event_service.build_overdue_warning_notification",
+        build_notification,
+    )
+
+    prepared_event, prepared_notification, checkin_url = prepare_overdue_notification(
+        session,
+        event_id,
+        public_base_url="https://continuity.whistler.com",
+    )
+
+    assert prepared_event is event
+    assert prepared_notification is notification
+    assert checkin_url == "https://continuity.whistler.com/checkins/example-token"
+
+    build_notification.assert_called_once_with(
+        event.heartbeat,
+        checkin_url=checkin_url,
+        escalation_enabled=True,
+        escalation_contact_name="Jamie",
+        escalation_at=escalation_at,
+    )
+
+
+def test_prepare_overdue_notification_omits_escalation_when_disabled(
+    monkeypatch,
+) -> None:
+    event_id = uuid4()
+    event = HeartbeatEvent(
+        id=event_id,
+        heartbeat_id=uuid4(),
+        event_type=HeartbeatEventType.OVERDUE,
+        occurred_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+        created_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+    event.heartbeat = MagicMock()
+    event.heartbeat.owner_name = "Scott"
+    event.heartbeat.owner_email = "scott@example.com"
+    event.heartbeat.escalation_enabled = False
+    event.heartbeat.escalation_contact_name = None
+    event.heartbeat.escalation_contact_email = None
+
+    session = MagicMock()
+    session.get.return_value = event
+
+    monkeypatch.setattr(
+        "app.services.heartbeat_event_service.issue_checkin_token",
+        MagicMock(return_value=MagicMock(raw_token="example-token")),
+    )
+
+    build_notification = MagicMock(
+        return_value=Notification(
+            channel=NotificationChannel.EMAIL,
+            recipient=NotificationRecipient(name="Scott", email="scott@example.com"),
+            message=NotificationMessage(
+                template_name="heartbeat_overdue_warning",
+                template_version=1,
+                subject="Continuity check-in overdue",
+                text_body="text",
+                html_body="html",
+            ),
+        )
+    )
+    monkeypatch.setattr(
+        "app.services.heartbeat_event_service.build_overdue_warning_notification",
+        build_notification,
+    )
+
+    prepare_overdue_notification(
+        session,
+        event_id,
+        public_base_url="https://continuity.whistler.com",
+    )
+
+    build_notification.assert_called_once_with(
+        event.heartbeat,
+        checkin_url="https://continuity.whistler.com/checkins/example-token",
+        escalation_enabled=False,
+        escalation_contact_name=None,
+        escalation_at=None,
+    )
+
+
+def test_prepare_overdue_notification_rejects_non_overdue_event() -> None:
+    event_id = uuid4()
+    event = HeartbeatEvent(
+        id=event_id,
+        heartbeat_id=uuid4(),
+        event_type=HeartbeatEventType.REMINDER_DUE,
+        occurred_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+        created_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = event
+
+    try:
+        prepare_overdue_notification(
+            session,
+            event_id,
+            public_base_url="https://continuity.whistler.com",
+        )
+    except OverdueNotificationPreparationError as exc:
+        assert str(exc) == "Heartbeat event is not an overdue event"
+    else:
+        raise AssertionError("Expected OverdueNotificationPreparationError")
+
+
+def test_prepare_overdue_notification_rejects_delivered_event() -> None:
+    event_id = uuid4()
+    event = HeartbeatEvent(
+        id=event_id,
+        heartbeat_id=uuid4(),
+        event_type=HeartbeatEventType.OVERDUE,
+        occurred_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+        delivered_at=datetime(2026, 7, 22, 13, 0, tzinfo=UTC),
+        created_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = event
+
+    try:
+        prepare_overdue_notification(
+            session,
+            event_id,
+            public_base_url="https://continuity.whistler.com",
+        )
+    except OverdueNotificationPreparationError as exc:
+        assert str(exc) == "Heartbeat event is already delivered"
+    else:
+        raise AssertionError("Expected OverdueNotificationPreparationError")
+
+
+def test_prepare_escalation_notification_returns_send_ready_payload(
+    monkeypatch,
+) -> None:
+    event_id = uuid4()
+    heartbeat_id = uuid4()
+    event = HeartbeatEvent(
+        id=event_id,
+        heartbeat_id=heartbeat_id,
+        event_type=HeartbeatEventType.ESCALATION_DUE,
+        occurred_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+        created_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+    event.heartbeat = MagicMock()
+    event.heartbeat.owner_name = "Scott"
+    event.heartbeat.escalation_contact_name = "Jamie"
+    event.heartbeat.escalation_contact_email = "jamie@example.com"
+
+    session = MagicMock()
+    session.get.return_value = event
+
+    notification = Notification(
+        channel=NotificationChannel.EMAIL,
+        recipient=NotificationRecipient(
+            name="Jamie",
+            email="jamie@example.com",
+        ),
+        message=NotificationMessage(
+            template_name="escalation_notification",
+            template_version=1,
+            subject="Continuity escalation notice",
+            text_body="text",
+            html_body="html",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.heartbeat_event_service.build_escalation_notification",
+        MagicMock(return_value=notification),
+    )
+
+    prepared_event, prepared_notification = prepare_escalation_notification(
+        session,
+        event_id,
+    )
+
+    assert prepared_event is event
+    assert prepared_notification is notification
+
+
+def test_prepare_escalation_notification_rejects_non_escalation_event() -> None:
+    event_id = uuid4()
+    event = HeartbeatEvent(
+        id=event_id,
+        heartbeat_id=uuid4(),
+        event_type=HeartbeatEventType.OVERDUE,
+        occurred_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+        created_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = event
+
+    try:
+        prepare_escalation_notification(session, event_id)
+    except EscalationNotificationPreparationError as exc:
+        assert str(exc) == "Heartbeat event is not an escalation event"
+    else:
+        raise AssertionError("Expected EscalationNotificationPreparationError")
+
+
+def test_prepare_escalation_notification_rejects_delivered_event() -> None:
+    event_id = uuid4()
+    event = HeartbeatEvent(
+        id=event_id,
+        heartbeat_id=uuid4(),
+        event_type=HeartbeatEventType.ESCALATION_DUE,
+        occurred_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+        delivered_at=datetime(2026, 7, 22, 13, 0, tzinfo=UTC),
+        created_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = event
+
+    try:
+        prepare_escalation_notification(session, event_id)
+    except EscalationNotificationPreparationError as exc:
+        assert str(exc) == "Heartbeat event is already delivered"
+    else:
+        raise AssertionError("Expected EscalationNotificationPreparationError")
+
+
+def test_prepare_escalation_notification_rejects_missing_contact() -> None:
+    event_id = uuid4()
+    event = HeartbeatEvent(
+        id=event_id,
+        heartbeat_id=uuid4(),
+        event_type=HeartbeatEventType.ESCALATION_DUE,
+        occurred_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+        created_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+    )
+    event.heartbeat = MagicMock()
+    event.heartbeat.owner_name = "Scott"
+    event.heartbeat.escalation_contact_name = None
+    event.heartbeat.escalation_contact_email = None
+
+    session = MagicMock()
+    session.get.return_value = event
+
+    try:
+        prepare_escalation_notification(session, event_id)
+    except EscalationNotificationPreparationError as exc:
+        assert str(exc) == "Heartbeat has no escalation contact configured"
+    else:
+        raise AssertionError("Expected EscalationNotificationPreparationError")

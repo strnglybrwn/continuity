@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Continuity escalation notice</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4;">
+    <table
+        role="presentation"
+        width="100%"
+        cellspacing="0"
+        cellpadding="0"
+        style="background-color: #f4f4f4; padding: 24px;"
+    >
+        <tr>
+            <td align="center">
+                <table
+                    role="presentation"
+                    width="100%"
+                    cellspacing="0"
+                    cellpadding="0"
+                    style="
+                        max-width: 600px;
+                        background-color: #ffffff;
+                        border-radius: 8px;
+                        padding: 32px;
+                        font-family: Arial, sans-serif;
+                        color: #222222;
+                    "
+                >
+                    <tr>
+                        <td>
+                            <h1 style="margin-top: 0; font-size: 24px;">
+                                Continuity escalation notice
+                            </h1>
+
+                            <p>Hi {{ escalation_contact_name }},</p>
+
+                            <p>
+                                You are receiving this message because you are the
+                                nominated escalation contact for
+                                <strong>{{ owner_name }}</strong>'s Continuity
+                                check-in.
+                            </p>
+
+                            <p>
+                                <strong>{{ owner_name }}</strong> has not confirmed a
+                                scheduled check-in that was due on
+                                <strong>{{ overdue_since_date }}</strong>, and has not
+                                responded to a follow-up reminder.
+                            </p>
+
+                            <p>
+                                Please use your own judgement to check on
+                                {{ owner_name }}'s wellbeing.
+                            </p>
+
+                            <p>Continuity</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

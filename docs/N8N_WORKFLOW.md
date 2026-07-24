@@ -1,4 +1,4 @@
-# n8n Workflow Build Spec (MVP Reminder Flow)
+# n8n Workflow Build Spec (Reminder / Overdue-Warning / Escalation Flow)
 
 ## Goal
 
@@ -6,11 +6,17 @@ Build one n8n workflow that:
 
 1. Triggers on a schedule and evaluates due heartbeats
 2. Polls Continuity for pending heartbeat events
-3. Selects reminder_due events
-4. Prepares reminder payload and one-time check-in URL
-5. Sends reminder email
+3. Branches by event_type: reminder_due, overdue, escalation_due
+4. Prepares the matching payload (with a one-time check-in URL for reminder_due and overdue; no check-in URL for escalation_due)
+5. Sends the matching email (to the owner for reminder_due/overdue, to the escalation contact for escalation_due)
 6. Marks event delivered only after successful send
 7. Optionally reports queue staleness from /heartbeat-events/metrics for operator alerting
+
+Three event types now flow through this workflow:
+
+- `reminder_due` — sent to the owner ahead of the due date. Includes a check-in link.
+- `overdue` — sent to the owner once the heartbeat has lapsed (a second, more urgent warning). Includes a check-in link, and conditionally mentions the escalation contact/deadline if escalation is enabled.
+- `escalation_due` — sent to the nominated escalation contact once the escalation delay has elapsed. Informational only, no check-in link (the contact cannot check in on the owner's behalf).
 
 ## Import File
 
@@ -139,23 +145,22 @@ return payload.map((event) => ({ json: event }));
 ### Node 5
 
 1. Name
-- IF - Is Reminder Due Event
+- Switch - Route By Event Type
 
 2. Type
-- If
+- Switch
 
 3. Condition
-- Left Value: {{$json.event_type}}
-- Operation: equals
-- Right Value: reminder_due
+- Mode: Rules
+- Value: {{$json.event_type}}
+- Output 0 (reminder_due): equals reminder_due
+- Output 1 (overdue): equals overdue
+- Output 2 (escalation_due): equals escalation_due
 
-4. True branch
-- Continue flow
+4. Fallback
+- No fallback output connected — any other event_type ends the branch intentionally.
 
-5. False branch
-- End (no action)
-
-### Node 6
+### Node 6a
 
 1. Name
 - HTTP - Prepare Reminder Payload
@@ -183,7 +188,65 @@ return payload.map((event) => ({ json: event }));
 - html_body
 - checkin_url
 
-### Node 7
+### Node 6b
+
+1. Name
+- HTTP - Prepare Overdue-Warning Payload
+
+2. Type
+- HTTP Request
+
+3. Key config
+- Method: POST
+- URL: {{$env.CONTINUITY_API_BASE_URL}}/heartbeat-events/{{$json.id}}/prepare-overdue
+- Response Format: JSON
+- Timeout: 30000
+- Retry On Fail: true
+- Max Tries: 3
+- Wait Between Tries: 2000
+- Continue On Fail: false
+
+4. Expected response fields used downstream
+- event_id
+- heartbeat_id
+- owner_name
+- owner_email
+- subject
+- text_body
+- html_body
+- checkin_url
+
+### Node 6c
+
+1. Name
+- HTTP - Prepare Escalation Payload
+
+2. Type
+- HTTP Request
+
+3. Key config
+- Method: POST
+- URL: {{$env.CONTINUITY_API_BASE_URL}}/heartbeat-events/{{$json.id}}/prepare-escalation
+- Response Format: JSON
+- Timeout: 30000
+- Retry On Fail: true
+- Max Tries: 3
+- Wait Between Tries: 2000
+- Continue On Fail: false
+
+4. Expected response fields used downstream
+- event_id
+- heartbeat_id
+- owner_name
+- escalation_contact_name
+- escalation_contact_email
+- subject
+- text_body
+- html_body
+
+Note: no checkin_url field — the escalation-contact email is informational only and does not carry a check-in action link.
+
+### Node 7a
 
 1. Name
 - Email - Send Reminder
@@ -195,6 +258,46 @@ return payload.map((event) => ({ json: event }));
 - Credentials: your SMTP credential
 - From Email: {{$env.CONTINUITY_NOREPLY_FROM}}
 - To Email: {{$json.owner_email}}
+- Subject: {{$json.subject}}
+- Text: {{$json.text_body}}
+- HTML: {{$json.html_body}}
+- Continue On Fail: false
+
+4. Operational rule
+- This node must succeed before delivery is acknowledged
+
+### Node 7b
+
+1. Name
+- Email - Send Overdue Warning
+
+2. Type
+- Email Send
+
+3. Key config
+- Credentials: your SMTP credential
+- From Email: {{$env.CONTINUITY_NOREPLY_FROM}}
+- To Email: {{$json.owner_email}}
+- Subject: {{$json.subject}}
+- Text: {{$json.text_body}}
+- HTML: {{$json.html_body}}
+- Continue On Fail: false
+
+4. Operational rule
+- This node must succeed before delivery is acknowledged
+
+### Node 7c
+
+1. Name
+- Email - Send Escalation Notice
+
+2. Type
+- Email Send
+
+3. Key config
+- Credentials: your SMTP credential
+- From Email: {{$env.CONTINUITY_NOREPLY_FROM}}
+- To Email: {{$json.escalation_contact_email}}
 - Subject: {{$json.subject}}
 - Text: {{$json.text_body}}
 - HTML: {{$json.html_body}}
@@ -258,31 +361,40 @@ return [
 1. Trigger - Every 5 Minutes -> HTTP - Evaluate Due Heartbeats
 2. HTTP - Evaluate Due Heartbeats -> HTTP - List Pending Events
 3. HTTP - List Pending Events -> Code - Expand Event Array
-4. Code - Expand Event Array -> IF - Is Reminder Due Event
-5. IF - Is Reminder Due Event (true) -> HTTP - Prepare Reminder Payload
-6. HTTP - Prepare Reminder Payload -> Email - Send Reminder
-7. Email - Send Reminder -> HTTP - Mark Event Delivered
-8. HTTP - Mark Event Delivered -> Code - Execution Summary
-9. IF - Is Reminder Due Event (false) -> no connection
+4. Code - Expand Event Array -> Switch - Route By Event Type
+5. Switch - Route By Event Type (reminder_due) -> HTTP - Prepare Reminder Payload
+6. Switch - Route By Event Type (overdue) -> HTTP - Prepare Overdue-Warning Payload
+7. Switch - Route By Event Type (escalation_due) -> HTTP - Prepare Escalation Payload
+8. HTTP - Prepare Reminder Payload -> Email - Send Reminder
+9. HTTP - Prepare Overdue-Warning Payload -> Email - Send Overdue Warning
+10. HTTP - Prepare Escalation Payload -> Email - Send Escalation Notice
+11. Email - Send Reminder -> HTTP - Mark Event Delivered
+12. Email - Send Overdue Warning -> HTTP - Mark Event Delivered
+13. Email - Send Escalation Notice -> HTTP - Mark Event Delivered
+14. HTTP - Mark Event Delivered -> Code - Execution Summary
+15. Switch - Route By Event Type (no match) -> no connection
+
+All three email-send nodes converge on the same HTTP - Mark Event Delivered node, since every prepare-* response includes event_id.
 
 ## Error Handling Pattern
 
 Use workflow-level error handling plus node retries.
 
-1. Keep Continue On Fail disabled for nodes 5, 6, and 7.
+1. Keep Continue On Fail disabled for the Switch node and all HTTP/Email nodes in each branch.
 2. Keep retries enabled on HTTP nodes.
-3. If Email - Send Reminder fails, do not mark delivered.
+3. If any Email - Send node fails, do not mark delivered.
 4. Let the event remain pending so a later run can retry.
 
 ## Verification Checklist
 
-After activation, confirm the following with one reminder event:
+After activation, confirm the following with one event of each type:
 
-1. HTTP - Prepare Reminder Payload returns checkin_url.
-2. Email is sent to owner_email with expected subject/body.
-3. HTTP - Mark Event Delivered succeeds and sets delivered_at.
+1. HTTP - Prepare Reminder Payload / Prepare Overdue-Warning Payload returns checkin_url; HTTP - Prepare Escalation Payload does not include a checkin_url.
+2. Reminder and overdue-warning emails are sent to owner_email; escalation emails are sent to escalation_contact_email.
+3. HTTP - Mark Event Delivered succeeds and sets delivered_at for each event type.
 4. Event no longer appears in GET /heartbeat-events/pending.
-5. Reminder email check-in link opens confirmation page.
+5. Reminder and overdue-warning check-in links open the confirmation page.
+6. Escalation email contains no check-in link (informational only, by design).
 
 ## Optional Second Workflow (Failure Alerts)
 
@@ -340,8 +452,8 @@ If the workflow appears to do nothing, check these in order.
 - If Node 3 returns object/error text, Node 4 outputs zero items.
 
 7. Filter branch check
-- Confirm event_type exactly equals reminder_due in IF - Is Reminder Due Event.
-- Any other event_type follows false branch and ends intentionally.
+- Confirm event_type exactly equals reminder_due, overdue, or escalation_due in Switch - Route By Event Type.
+- Any other event_type falls through with no connection and ends intentionally.
 
 8. Execution log inspection
 - Open Executions and inspect latest run.

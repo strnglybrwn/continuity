@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Continuity check-in overdue</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4;">
+    <table
+        role="presentation"
+        width="100%"
+        cellspacing="0"
+        cellpadding="0"
+        style="background-color: #f4f4f4; padding: 24px;"
+    >
+        <tr>
+            <td align="center">
+                <table
+                    role="presentation"
+                    width="100%"
+                    cellspacing="0"
+                    cellpadding="0"
+                    style="
+                        max-width: 600px;
+                        background-color: #ffffff;
+                        border-radius: 8px;
+                        padding: 32px;
+                        font-family: Arial, sans-serif;
+                        color: #222222;
+                    "
+                >
+                    <tr>
+                        <td>
+                            <h1 style="margin-top: 0; font-size: 24px; color: #b3261e;">
+                                Continuity check-in overdue
+                            </h1>
+
+                            <p>Hi {{ owner_name }},</p>
+
+                            <p>
+                                Your Continuity check-in was due on
+                                <strong>{{ next_due_date }}</strong> and has not yet
+                                been confirmed.
+                            </p>
+
+                            <p>
+                                Please confirm that you are OK as soon as possible by
+                                selecting the button below.
+                            </p>
+
+                            <p style="margin: 32px 0;">
+                                <a
+                                    href="{{ checkin_url }}"
+                                    style="
+                                        display: inline-block;
+                                        padding: 14px 24px;
+                                        background-color: #b3261e;
+                                        color: #ffffff;
+                                        text-decoration: none;
+                                        border-radius: 6px;
+                                        font-weight: bold;
+                                    "
+                                >
+                                    Check in now
+                                </a>
+                            </p>
+
+                            {% if escalation_enabled %}
+                            <p style="
+                                background-color: #fdecea;
+                                border-radius: 6px;
+                                padding: 16px;
+                                color: #611a15;
+                            ">
+                                If you do not check in by
+                                <strong>{{ escalation_deadline_date }}</strong>,
+                                <strong>{{ escalation_contact_name }}</strong> will be
+                                notified as your nominated escalation contact.
+                            </p>
+                            {% endif %}
+
+                            <p>
+                                This check-in link will expire after 24 hours.
+                            </p>
+
+                            <p style="font-size: 14px; color: #666666;">
+                                If you were not expecting this message, you can safely
+                                ignore it.
+                            </p>
+
+                            <p>Continuity</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

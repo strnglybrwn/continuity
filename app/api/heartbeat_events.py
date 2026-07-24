@@ -5,19 +5,25 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.heartbeat_schemas import (
+    HeartbeatEscalationNotificationResponse,
     HeartbeatEventEvaluationResponse,
     HeartbeatEventDeliveredResponse,
     HeartbeatEventMetricsResponse,
     HeartbeatEventResponse,
+    HeartbeatOverdueNotificationResponse,
     HeartbeatReminderNotificationResponse,
 )
 from app.config import settings
 from app.persistence.database import get_db_session
 from app.persistence.models import HeartbeatEvent
 from app.services.heartbeat_event_service import (
+    EscalationNotificationPreparationError,
     get_pending_heartbeat_event_metrics,
     list_pending_heartbeat_events,
     mark_heartbeat_event_delivered,
+    OverdueNotificationPreparationError,
+    prepare_escalation_notification,
+    prepare_overdue_notification,
     prepare_reminder_notification,
     ReminderNotificationPreparationError,
 )
@@ -100,6 +106,10 @@ def heartbeat_event_metrics_endpoint(
         stale_pending_alert=metrics.stale_pending_alert,
         stale_reminder_due_total=metrics.stale_reminder_due_total,
         stale_after_seconds=stale_after_seconds,
+        pending_overdue_total=metrics.pending_overdue_total,
+        pending_escalation_due_total=metrics.pending_escalation_due_total,
+        stale_overdue_total=metrics.stale_overdue_total,
+        stale_escalation_due_total=metrics.stale_escalation_due_total,
     )
 
 
@@ -146,6 +156,97 @@ def prepare_heartbeat_event_reminder_endpoint(
         text_body=notification.message.text_body,
         html_body=notification.message.html_body,
         checkin_url=checkin_url,
+    )
+
+
+@router.post(
+    "/{event_id}/prepare-overdue",
+    response_model=HeartbeatOverdueNotificationResponse,
+)
+def prepare_heartbeat_event_overdue_endpoint(
+    event_id: UUID,
+    session: DatabaseSession,
+) -> HeartbeatOverdueNotificationResponse:
+    try:
+        event, notification, checkin_url = prepare_overdue_notification(
+            session,
+            event_id,
+            public_base_url=settings.public_base_url,
+        )
+    except OverdueNotificationPreparationError as exc:
+        detail = str(exc)
+
+        if detail == "Heartbeat event not found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=detail,
+            ) from exc
+
+        if detail == "Heartbeat event is already delivered":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=detail,
+            ) from exc
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        ) from exc
+
+    return HeartbeatOverdueNotificationResponse(
+        event_id=event.id,
+        heartbeat_id=event.heartbeat_id,
+        owner_name=notification.recipient.name,
+        owner_email=notification.recipient.email,
+        subject=notification.message.subject,
+        text_body=notification.message.text_body,
+        html_body=notification.message.html_body,
+        checkin_url=checkin_url,
+    )
+
+
+@router.post(
+    "/{event_id}/prepare-escalation",
+    response_model=HeartbeatEscalationNotificationResponse,
+)
+def prepare_heartbeat_event_escalation_endpoint(
+    event_id: UUID,
+    session: DatabaseSession,
+) -> HeartbeatEscalationNotificationResponse:
+    try:
+        event, notification = prepare_escalation_notification(
+            session,
+            event_id,
+        )
+    except EscalationNotificationPreparationError as exc:
+        detail = str(exc)
+
+        if detail == "Heartbeat event not found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=detail,
+            ) from exc
+
+        if detail == "Heartbeat event is already delivered":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=detail,
+            ) from exc
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        ) from exc
+
+    return HeartbeatEscalationNotificationResponse(
+        event_id=event.id,
+        heartbeat_id=event.heartbeat_id,
+        owner_name=event.heartbeat.owner_name,
+        escalation_contact_name=notification.recipient.name,
+        escalation_contact_email=notification.recipient.email,
+        subject=notification.message.subject,
+        text_body=notification.message.text_body,
+        html_body=notification.message.html_body,
     )
 
 

@@ -26,8 +26,11 @@ def run_heartbeat_evaluation() -> HeartbeatEvaluationResult:
 
         if metrics.stale_pending_alert:
             logger.warning(
-                "Stale pending reminder events detected: stale=%d threshold_seconds=%d oldest_age_seconds=%s",
+                "Stale pending events detected: reminder=%d overdue=%d escalation=%d "
+                "threshold_seconds=%d oldest_age_seconds=%s",
                 metrics.stale_reminder_due_total,
+                metrics.stale_overdue_total,
+                metrics.stale_escalation_due_total,
                 settings.heartbeat_pending_alert_seconds,
                 metrics.oldest_pending_age_seconds,
             )
