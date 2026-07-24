@@ -13,7 +13,6 @@ from app.services.checkin_token_service import (
     redeem_checkin_token,
 )
 
-
 RAW_TOKEN = "valid-raw-checkin-token"
 REDEEMED_AT = datetime(2026, 7, 22, 14, 0, tzinfo=UTC)
 

@@ -87,33 +87,81 @@
     },
     {
       "id": "5",
-      "name": "IF - Is Reminder Due Event",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
+      "name": "Switch - Route By Event Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
       "position": [
         1260,
         300
       ],
       "parameters": {
-        "conditions": {
-          "string": [
+        "mode": "rules",
+        "rules": {
+          "values": [
             {
-              "value1": "={{$json.event_type}}",
-              "operation": "equals",
-              "value2": "reminder_due"
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.event_type}}",
+                    "rightValue": "reminder_due",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reminder_due"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.event_type}}",
+                    "rightValue": "overdue",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "overdue"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.event_type}}",
+                    "rightValue": "escalation_due",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "escalation_due"
             }
           ]
-        }
+        },
+        "options": {}
       }
     },
     {
-      "id": "6",
+      "id": "6a",
       "name": "HTTP - Prepare Reminder Payload",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1520,
-        180
+        140
       ],
       "retryOnFail": true,
       "maxTries": 3,
@@ -127,13 +175,53 @@
       }
     },
     {
-      "id": "7",
+      "id": "6b",
+      "name": "HTTP - Prepare Overdue-Warning Payload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/' + $json.id + '/prepare-overdue'}}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "6c",
+      "name": "HTTP - Prepare Escalation Payload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1520,
+        460
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "POST",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/' + $json.id + '/prepare-escalation'}}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "7a",
       "name": "Email - Send Reminder",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
         1780,
-        180
+        140
       ],
       "parameters": {
         "fromEmail": "={{$env.CONTINUITY_NOREPLY_FROM}}",
@@ -146,13 +234,51 @@
       "notes": "Attach your SMTP credentials to this node after import."
     },
     {
+      "id": "7b",
+      "name": "Email - Send Overdue Warning",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1780,
+        300
+      ],
+      "parameters": {
+        "fromEmail": "={{$env.CONTINUITY_NOREPLY_FROM}}",
+        "toEmail": "={{$json.owner_email}}",
+        "subject": "={{$json.subject}}",
+        "text": "={{$json.text_body}}",
+        "html": "={{$json.html_body}}"
+      },
+      "notesInFlow": true,
+      "notes": "Attach your SMTP credentials to this node after import."
+    },
+    {
+      "id": "7c",
+      "name": "Email - Send Escalation Notice",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1780,
+        460
+      ],
+      "parameters": {
+        "fromEmail": "={{$env.CONTINUITY_NOREPLY_FROM}}",
+        "toEmail": "={{$json.escalation_contact_email}}",
+        "subject": "={{$json.subject}}",
+        "text": "={{$json.text_body}}",
+        "html": "={{$json.html_body}}"
+      },
+      "notesInFlow": true,
+      "notes": "Attach your SMTP credentials to this node after import. Informational only \u2014 no check-in link is sent to the escalation contact."
+    },
+    {
       "id": "8",
       "name": "HTTP - Mark Event Delivered",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         2040,
-        180
+        300
       ],
       "retryOnFail": true,
       "maxTries": 3,
@@ -172,7 +298,7 @@
       "typeVersion": 2,
       "position": [
         2300,
-        180
+        300
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
@@ -218,14 +344,14 @@
       "main": [
         [
           {
-            "node": "IF - Is Reminder Due Event",
+            "node": "Switch - Route By Event Type",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "IF - Is Reminder Due Event": {
+    "Switch - Route By Event Type": {
       "main": [
         [
           {
@@ -234,7 +360,20 @@
             "index": 0
           }
         ],
-        []
+        [
+          {
+            "node": "HTTP - Prepare Overdue-Warning Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP - Prepare Escalation Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "HTTP - Prepare Reminder Payload": {
@@ -248,7 +387,51 @@
         ]
       ]
     },
+    "HTTP - Prepare Overdue-Warning Payload": {
+      "main": [
+        [
+          {
+            "node": "Email - Send Overdue Warning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Prepare Escalation Payload": {
+      "main": [
+        [
+          {
+            "node": "Email - Send Escalation Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Email - Send Reminder": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Mark Event Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email - Send Overdue Warning": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Mark Event Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email - Send Escalation Notice": {
       "main": [
         [
           {

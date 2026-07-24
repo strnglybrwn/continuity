@@ -5,15 +5,13 @@ from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 
-from app.core.clock import utc_now
-
 from app.api.checkins import router as checkin_router
 from app.api.heartbeat_dashboard import router as heartbeat_dashboard_router
 from app.api.heartbeat_events import router as heartbeat_event_router
 from app.api.heartbeats import router as heartbeat_router
 from app.config import settings
+from app.core.clock import utc_now
 from app.scheduler import run_heartbeat_scheduler
-
 
 logging.basicConfig(
     level=logging.INFO,

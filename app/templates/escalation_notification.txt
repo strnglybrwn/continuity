@@ -1,0 +1,11 @@
+Hi {{ escalation_contact_name }},
+
+You are receiving this message because you are the nominated escalation
+contact for {{ owner_name }}'s Continuity check-in.
+
+{{ owner_name }} has not confirmed a scheduled check-in that was due on
+{{ overdue_since_date }}, and has not responded to a follow-up reminder.
+
+Please use your own judgement to check on {{ owner_name }}'s wellbeing.
+
+Continuity

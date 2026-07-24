@@ -33,7 +33,7 @@ Completed:
 5. Check-in confirmation web UX and one-time token redemption semantics.
 6. Event queue endpoints for pending events and delivered acknowledgment.
 7. CI pipeline for lint/test and multi-platform image publishing.
-8. Operations dashboard for heartbeat verification and inline heartbeat settings updates.
+8. Operations dashboard for heartbeat verification, inline heartbeat settings updates, heartbeat creation, and heartbeat deletion.
 9. Reminder queue metrics and stale alerting runbook support.
 10. Scripted Swarm deployment flow with migration-first release process.
 

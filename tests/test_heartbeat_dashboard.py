@@ -184,3 +184,178 @@ def test_heartbeat_dashboard_update_validation_error(monkeypatch) -> None:
 
     assert response.status_code == 303
     assert "error=" in response.headers["location"]
+
+
+def test_heartbeat_dashboard_create_redirects_with_success(monkeypatch) -> None:
+    session = MagicMock()
+    created_heartbeat_id = uuid4()
+
+    called: dict[str, object] = {}
+
+    def fake_create_heartbeat(_session, request):
+        called["request"] = request
+        heartbeat = MagicMock()
+        heartbeat.id = created_heartbeat_id
+        return heartbeat
+
+    monkeypatch.setattr(
+        "app.api.heartbeat_dashboard.create_heartbeat",
+        fake_create_heartbeat,
+    )
+
+    app.dependency_overrides[get_db_session] = override_session(session)
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/ui/heartbeats",
+            data={
+                "owner_name": "New Owner",
+                "owner_email": "new@example.com",
+                "interval_days": "10",
+                "reminder_days": "5",
+                "escalation_enabled": "true",
+                "escalation_delay_days": "3",
+                "escalation_contact_name": "Ops Lead",
+                "escalation_contact_email": "ops@example.com",
+            },
+            follow_redirects=False,
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 303
+    assert str(created_heartbeat_id) in response.headers["location"]
+    assert "created=" in response.headers["location"]
+
+    request = called["request"]
+    assert request.owner_name == "New Owner"
+    assert str(request.owner_email) == "new@example.com"
+    assert request.interval_days == 10
+    assert request.reminder_days == 5
+    assert request.escalation_enabled is True
+    assert request.escalation_delay_days == 3
+    assert request.escalation_contact_name == "Ops Lead"
+    assert str(request.escalation_contact_email) == "ops@example.com"
+
+
+def test_heartbeat_dashboard_create_validation_error(monkeypatch) -> None:
+    session = MagicMock()
+
+    create_called = MagicMock()
+    monkeypatch.setattr(
+        "app.api.heartbeat_dashboard.create_heartbeat",
+        create_called,
+    )
+
+    app.dependency_overrides[get_db_session] = override_session(session)
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/ui/heartbeats",
+            data={
+                "owner_name": "New Owner",
+                "owner_email": "not-an-email",
+                "interval_days": "10",
+                "reminder_days": "5",
+                "escalation_delay_days": "2",
+            },
+            follow_redirects=False,
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 303
+    assert "error=" in response.headers["location"]
+    create_called.assert_not_called()
+
+
+def test_heartbeat_dashboard_delete_redirects_with_success(monkeypatch) -> None:
+    heartbeat_id = uuid4()
+    session = MagicMock()
+
+    monkeypatch.setattr(
+        "app.api.heartbeat_dashboard.delete_heartbeat",
+        lambda _session, _heartbeat_id: True,
+    )
+
+    app.dependency_overrides[get_db_session] = override_session(session)
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            f"/ui/heartbeats/{heartbeat_id}/delete",
+            follow_redirects=False,
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 303
+    assert str(heartbeat_id) in response.headers["location"]
+    assert "deleted=" in response.headers["location"]
+
+
+def test_heartbeat_dashboard_delete_returns_error_when_not_found(monkeypatch) -> None:
+    heartbeat_id = uuid4()
+    session = MagicMock()
+
+    monkeypatch.setattr(
+        "app.api.heartbeat_dashboard.delete_heartbeat",
+        lambda _session, _heartbeat_id: False,
+    )
+
+    app.dependency_overrides[get_db_session] = override_session(session)
+
+    try:
+        client = TestClient(app)
+        response = client.post(
+            f"/ui/heartbeats/{heartbeat_id}/delete",
+            follow_redirects=False,
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 303
+    assert "error=" in response.headers["location"]
+
+
+def test_heartbeat_dashboard_page_includes_create_form_and_delete_button(monkeypatch) -> None:
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        escalation_enabled=True,
+        escalation_delay_days=2,
+        escalation_contact_name="Ops Lead",
+        escalation_contact_email="ops@example.com",
+        last_checkin_at=datetime(2026, 7, 1, 10, 0, tzinfo=UTC),
+        next_due_at=datetime(2026, 8, 1, 10, 0, tzinfo=UTC),
+        created_at=datetime(2026, 6, 1, 10, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 7, 1, 10, 0, tzinfo=UTC),
+    )
+
+    monkeypatch.setattr(
+        "app.api.heartbeat_dashboard.list_heartbeats",
+        lambda _session: [heartbeat],
+    )
+
+    session = MagicMock()
+    app.dependency_overrides[get_db_session] = override_session(session)
+
+    try:
+        client = TestClient(app)
+        response = client.get("/ui/heartbeats")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert "Add New Heartbeat" in response.text
+    assert 'action="/ui/heartbeats"' in response.text
+    assert f'action="/ui/heartbeats/{heartbeat.id}/delete"' in response.text
+    assert "Delete Heartbeat" in response.text
+    assert "Send overdue warning to owner" in response.text
+    assert "Send escalation notice to contact" in response.text

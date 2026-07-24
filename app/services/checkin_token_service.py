@@ -7,16 +7,14 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.clock import utc_now
-
 from app.api.heartbeat_schemas import HeartbeatCheckInCreate
+from app.core.clock import utc_now
 from app.persistence.models import (
     Heartbeat,
     HeartbeatCheckIn,
     HeartbeatCheckInToken,
 )
 from app.services.heartbeat_service import _apply_heartbeat_checkin
-
 
 DEFAULT_TOKEN_LIFETIME = timedelta(hours=24)
 

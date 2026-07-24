@@ -315,6 +315,22 @@ def list_heartbeats(
     )
 
 
+def delete_heartbeat(
+    session: Session,
+    heartbeat_id: UUID,
+) -> bool:
+    """Delete a heartbeat and its dependent check-ins, tokens, and events."""
+    heartbeat = session.get(Heartbeat, heartbeat_id)
+
+    if heartbeat is None:
+        return False
+
+    session.delete(heartbeat)
+    session.commit()
+
+    return True
+
+
 def _apply_heartbeat_checkin(
     session: Session,
     heartbeat: Heartbeat,

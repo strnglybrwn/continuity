@@ -10,7 +10,6 @@ from app.persistence.database import get_db_session
 from app.persistence.models import Heartbeat, HeartbeatCheckInToken
 from app.services.checkin_token_service import hash_checkin_token
 
-
 RAW_TOKEN = "valid-public-checkin-token"
 REDEEMED_AT = datetime(2026, 7, 22, 15, 0, tzinfo=UTC)
 

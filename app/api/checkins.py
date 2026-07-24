@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from app.persistence.database import get_db_session
 from app.services.checkin_token_service import redeem_checkin_token
 
-
 router = APIRouter(
     prefix="/checkins",
     tags=["check-ins"],

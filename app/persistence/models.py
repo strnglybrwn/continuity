@@ -6,7 +6,6 @@ from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.clock import utc_now
-
 from app.domain.heartbeat import (
     CheckInStatus,
     HeartbeatEventType,

@@ -1,0 +1,18 @@
+Hi {{ owner_name }},
+
+Your Continuity check-in was due on {{ next_due_date }} and has not yet been
+confirmed.
+
+Please confirm that you are OK as soon as possible by visiting the link
+below:
+
+{{ checkin_url }}
+{% if escalation_enabled %}
+If you do not check in by {{ escalation_deadline_date }}, {{ escalation_contact_name }}
+will be notified as your nominated escalation contact.
+{% endif %}
+This check-in link will expire after 24 hours.
+
+If you were not expecting this message, you can safely ignore it.
+
+Continuity

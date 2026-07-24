@@ -109,6 +109,28 @@ class HeartbeatReminderNotificationResponse(BaseModel):
     checkin_url: str
 
 
+class HeartbeatOverdueNotificationResponse(BaseModel):
+    event_id: UUID
+    heartbeat_id: UUID
+    owner_name: str
+    owner_email: EmailStr
+    subject: str
+    text_body: str
+    html_body: str
+    checkin_url: str
+
+
+class HeartbeatEscalationNotificationResponse(BaseModel):
+    event_id: UUID
+    heartbeat_id: UUID
+    owner_name: str
+    escalation_contact_name: str
+    escalation_contact_email: EmailStr
+    subject: str
+    text_body: str
+    html_body: str
+
+
 class HeartbeatEventEvaluationResponse(BaseModel):
     evaluated: int
     changed: int
@@ -122,3 +144,7 @@ class HeartbeatEventMetricsResponse(BaseModel):
     stale_pending_alert: bool
     stale_reminder_due_total: int
     stale_after_seconds: int
+    pending_overdue_total: int = 0
+    pending_escalation_due_total: int = 0
+    stale_overdue_total: int = 0
+    stale_escalation_due_total: int = 0
