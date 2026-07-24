@@ -55,7 +55,7 @@ def test_heartbeat_dashboard_lists_recipient_email(monkeypatch) -> None:
     assert "Timeline" in response.text
     assert "Next Actions" in response.text
     assert "Configurable Policy" in response.text
-    assert "01/08/2026 10:00" in response.text
+    assert "01/08/2026 11:00 BST" in response.text
     assert "Total heartbeats: 1" in response.text
 
 

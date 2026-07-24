@@ -82,7 +82,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const payload = $input.first()?.json;\n\nif (!Array.isArray(payload)) {\n  return [];\n}\n\nreturn payload.map((event) => ({ json: event }));"
+        "jsCode": "const items = $input.all();\nconst expanded = [];\n\nfor (const item of items) {\n  if (Array.isArray(item.json)) {\n    for (const event of item.json) {\n      expanded.push({ json: event });\n    }\n  } else {\n    expanded.push({ json: item.json });\n  }\n}\n\nreturn expanded;"
       }
     },
     {
@@ -285,7 +285,7 @@
       "waitBetweenTries": 2000,
       "parameters": {
         "method": "POST",
-        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/' + $json.event_id + '/delivered'}}",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/' + $('Code - Expand Event Array').item.json.id + '/delivered'}}",
         "options": {
           "timeout": 30000
         }

@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlencode
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -11,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationError, mo
 from sqlalchemy.orm import Session
 
 from app.api.heartbeat_schemas import HeartbeatCreate
+from app.config import settings
 from app.core.clock import utc_now
 from app.persistence.database import get_db_session
 from app.services.heartbeat_service import (
@@ -65,8 +67,16 @@ class HeartbeatDashboardUpdate(BaseModel):
         return self
 
 
+DASHBOARD_TIMEZONE = ZoneInfo(settings.dashboard_display_timezone)
+
+
 def _format_dashboard_datetime(value: datetime | None) -> str:
-    return value.strftime("%d/%m/%Y %H:%M") if value is not None else "-"
+    if value is None:
+        return "-"
+
+    localized = value.astimezone(DASHBOARD_TIMEZONE)
+
+    return localized.strftime("%d/%m/%Y %H:%M %Z")
 
 
 def _risk_label(
