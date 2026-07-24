@@ -1,14 +1,14 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
-
-import pytest
 from uuid import uuid4
 
-from app.config import settings
+import pytest
+
 from app.api.heartbeat_schemas import (
     HeartbeatCheckInCreate,
     HeartbeatCreate,
 )
+from app.config import settings
 from app.domain.heartbeat import (
     CheckInStatus,
     HeartbeatEventType,

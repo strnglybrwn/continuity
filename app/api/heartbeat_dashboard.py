@@ -24,7 +24,6 @@ from app.services.heartbeat_service import (
     update_heartbeat_dashboard_settings,
 )
 
-
 router = APIRouter(
     prefix="/ui",
     tags=["heartbeat-dashboard"],

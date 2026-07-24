@@ -11,7 +11,6 @@ from app.domain.notification import (
     NotificationRecipient,
 )
 
-
 REMINDER_TEMPLATE_NAME = "heartbeat_reminder"
 REMINDER_TEMPLATE_VERSION = 1
 REMINDER_SUBJECT = "Continuity check-in reminder"
