@@ -19,6 +19,16 @@ def test_lifecycle_day_seconds_accepts_positive_custom_value() -> None:
     assert settings.lifecycle_day_seconds == 60
 
 
+def test_effective_lifecycle_day_seconds_forces_real_days_in_production() -> None:
+    settings = Settings(
+        _env_file=None,
+        environment="production",
+        lifecycle_day_seconds=60,
+    )
+
+    assert settings.effective_lifecycle_day_seconds == 86_400
+
+
 @pytest.mark.parametrize("value", [0, -1])
 def test_lifecycle_day_seconds_must_be_positive(value: int) -> None:
     with pytest.raises(ValidationError):

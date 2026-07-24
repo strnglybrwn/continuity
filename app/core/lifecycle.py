@@ -12,7 +12,9 @@ def lifecycle_duration(
         raise ValueError("Lifecycle days cannot be negative")
 
     effective_seconds_per_day = (
-        settings.lifecycle_day_seconds if seconds_per_day is None else seconds_per_day
+        settings.effective_lifecycle_day_seconds
+        if seconds_per_day is None
+        else seconds_per_day
     )
 
     if effective_seconds_per_day <= 0:

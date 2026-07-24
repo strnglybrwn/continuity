@@ -46,6 +46,14 @@ class Settings(BaseSettings):
         )
 
     @property
+    def effective_lifecycle_day_seconds(self) -> int:
+        """Return accelerated lifecycle timing outside production only."""
+        if self.environment.strip().lower() == "production":
+            return 86_400
+
+        return self.lifecycle_day_seconds
+
+    @property
     def database_url(self) -> str:
         password = self.get_database_password()
 

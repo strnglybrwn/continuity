@@ -55,6 +55,7 @@ services:
     image: ghcr.io/strnglybrwn/continuity:${CONTINUITY_IMAGE_TAG:-latest}
     environment:
       CONTINUITY_ENVIRONMENT: production
+      CONTINUITY_LIFECYCLE_DAY_SECONDS: "86400"
       CONTINUITY_PUBLIC_BASE_URL: https://continuity.whistler.home
       CONTINUITY_HEARTBEAT_SCHEDULER_ENABLED: "true"
       CONTINUITY_HEARTBEAT_SCHEDULER_INTERVAL_SECONDS: "300"

@@ -45,6 +45,7 @@ Notes:
 
 1. Database password is required at runtime when the first DB session/engine is created.
 2. CONTINUITY_LIFECYCLE_DAY_SECONDS supports accelerated testing (for example, 60 seconds per day).
+3. Production deployments force a real-day lifecycle so a stale test override cannot compress reminder and escalation timing.
 
 ## Database Migration Workflow
 
