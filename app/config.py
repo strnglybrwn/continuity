@@ -17,6 +17,8 @@ class Settings(BaseSettings):
 
     lifecycle_day_seconds: int = Field(default=86_400, gt=0)
 
+    dashboard_display_timezone: str = "Europe/London"
+
     database_host: str = "postgres"
     database_port: int = 5432
     database_name: str = "continuity"
