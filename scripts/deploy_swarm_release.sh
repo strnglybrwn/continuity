@@ -7,7 +7,7 @@ set -euo pipefail
 # 2) --tag sha-<commit>
 
 STACK_NAME="${STACK_NAME:-continuity}"
-VERIFY_URL="${VERIFY_URL:-https://continuity.whistler.home/health}"
+VERIFY_URL="${VERIFY_URL:-https://continuity.boardmad.com/health}"
 IMAGE_REPO="${IMAGE_REPO:-ghcr.io/strnglybrwn/continuity}"
 DATABASE_HOST="${DATABASE_HOST:-${STACK_NAME}_postgres}"
 BACKEND_NETWORK="${BACKEND_NETWORK:-}"
@@ -28,7 +28,7 @@ Options:
 
 Environment overrides:
   STACK_NAME   Docker stack name (default: continuity)
-  VERIFY_URL   Health endpoint to verify (default: https://continuity.whistler.home/health)
+  VERIFY_URL   Health endpoint to verify (default: https://continuity.boardmad.com/health)
   IMAGE_REPO   Container repository (default: ghcr.io/strnglybrwn/continuity)
   DATABASE_HOST Database host used by migration job (default: <STACK_NAME>_postgres)
   BACKEND_NETWORK Overlay network used by migration job (auto-detected when unset)

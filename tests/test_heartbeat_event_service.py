@@ -174,12 +174,12 @@ def test_prepare_reminder_notification_returns_send_ready_payload(
     prepared_event, prepared_notification, checkin_url = prepare_reminder_notification(
         session,
         event_id,
-        public_base_url="https://continuity.whistler.com",
+        public_base_url="https://continuity.boardmad.com",
     )
 
     assert prepared_event is event
     assert prepared_notification is notification
-    assert checkin_url == "https://continuity.whistler.com/checkins/example-token"
+    assert checkin_url == "https://continuity.boardmad.com/checkins/example-token"
 
 
 def test_prepare_reminder_notification_rejects_non_reminder_event() -> None:
@@ -199,7 +199,7 @@ def test_prepare_reminder_notification_rejects_non_reminder_event() -> None:
         prepare_reminder_notification(
             session,
             event_id,
-            public_base_url="https://continuity.whistler.com",
+            public_base_url="https://continuity.boardmad.com",
         )
     except ReminderNotificationPreparationError as exc:
         assert str(exc) == "Heartbeat event is not a reminder event"
@@ -225,7 +225,7 @@ def test_prepare_reminder_notification_rejects_delivered_event() -> None:
         prepare_reminder_notification(
             session,
             event_id,
-            public_base_url="https://continuity.whistler.com",
+            public_base_url="https://continuity.boardmad.com",
         )
     except ReminderNotificationPreparationError as exc:
         assert str(exc) == "Heartbeat event is already delivered"
@@ -293,12 +293,12 @@ def test_prepare_overdue_notification_returns_send_ready_payload(
     prepared_event, prepared_notification, checkin_url = prepare_overdue_notification(
         session,
         event_id,
-        public_base_url="https://continuity.whistler.com",
+        public_base_url="https://continuity.boardmad.com",
     )
 
     assert prepared_event is event
     assert prepared_notification is notification
-    assert checkin_url == "https://continuity.whistler.com/checkins/example-token"
+    assert checkin_url == "https://continuity.boardmad.com/checkins/example-token"
 
     build_notification.assert_called_once_with(
         event.heartbeat,
@@ -356,12 +356,12 @@ def test_prepare_overdue_notification_omits_escalation_when_disabled(
     prepare_overdue_notification(
         session,
         event_id,
-        public_base_url="https://continuity.whistler.com",
+        public_base_url="https://continuity.boardmad.com",
     )
 
     build_notification.assert_called_once_with(
         event.heartbeat,
-        checkin_url="https://continuity.whistler.com/checkins/example-token",
+        checkin_url="https://continuity.boardmad.com/checkins/example-token",
         escalation_enabled=False,
         escalation_contact_name=None,
         escalation_at=None,
@@ -385,7 +385,7 @@ def test_prepare_overdue_notification_rejects_non_overdue_event() -> None:
         prepare_overdue_notification(
             session,
             event_id,
-            public_base_url="https://continuity.whistler.com",
+            public_base_url="https://continuity.boardmad.com",
         )
     except OverdueNotificationPreparationError as exc:
         assert str(exc) == "Heartbeat event is not an overdue event"
@@ -411,7 +411,7 @@ def test_prepare_overdue_notification_rejects_delivered_event() -> None:
         prepare_overdue_notification(
             session,
             event_id,
-            public_base_url="https://continuity.whistler.com",
+            public_base_url="https://continuity.boardmad.com",
         )
     except OverdueNotificationPreparationError as exc:
         assert str(exc) == "Heartbeat event is already delivered"

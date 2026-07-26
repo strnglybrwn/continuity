@@ -103,7 +103,7 @@ commit.
 Important production setting:
 
 - `CONTINUITY_PUBLIC_BASE_URL` in `deploy/stack.yml` must remain
-      `https://continuity.whistler.home` so reminder check-in links in email are
+      `https://continuity.boardmad.com` so reminder check-in links in email are
       generated with the public HTTPS host.
 
 ## First-time setup
@@ -205,7 +205,7 @@ re-pull when redeploying the same tag.
 Verify the running API.
 
 ```bash
-curl -k https://continuity.whistler.home/health
+curl -k https://continuity.boardmad.com/health
 ```
 
 Verify service image digest.
@@ -224,7 +224,7 @@ docker service ps continuity_api --no-trunc
 Verify published endpoints.
 
 ```bash
-curl -k https://continuity.whistler.home/openapi.json \
+curl -k https://continuity.boardmad.com/openapi.json \
 | jq '.paths | keys'
 ```
 
@@ -295,7 +295,7 @@ Merge into `master`, allow GitHub Actions to publish the multi-platform image, t
 - [ ] GitHub Actions passed
 - [ ] Multi-platform image published
 - [ ] `CONTINUITY_IMAGE_TAG` set to the published tag (not `latest`)
-- [ ] `deploy/stack.yml` has `CONTINUITY_PUBLIC_BASE_URL=https://continuity.whistler.home`
+- [ ] `deploy/stack.yml` has `CONTINUITY_PUBLIC_BASE_URL=https://continuity.boardmad.com`
 - [ ] Deployment executed via `scripts/deploy_swarm_release.sh`
 - [ ] Migration job run and logs confirmed clean
 - [ ] Docker Swarm stack deployed

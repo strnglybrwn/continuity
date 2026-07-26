@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="${CONTINUITY_BASE_URL:-https://continuity.whistler.com}"
+BASE_URL="${CONTINUITY_BASE_URL:-https://continuity.boardmad.com}"
 LIMIT="${CONTINUITY_PENDING_LIMIT:-100}"
 EVENT_ID="${CONTINUITY_EVENT_ID:-}"
 CONFIRM_CHECKIN="${CONTINUITY_CONFIRM_CHECKIN:-false}"

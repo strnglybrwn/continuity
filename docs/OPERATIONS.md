@@ -20,7 +20,7 @@ The API process may run the in-process scheduler if CONTINUITY_HEARTBEAT_SCHEDUL
 Access topology:
 
 1. Internal API endpoint for in-swarm workflow calls: http://api:8000
-2. External HTTPS endpoint through Caddy: https://continuity.whistler.home
+2. External HTTPS endpoint through Caddy: https://continuity.boardmad.com
 3. External n8n endpoint: http://n8n.whistler.home
 
 ## Health and Readiness
@@ -113,7 +113,7 @@ Success response:
 	"subject": "Continuity check-in reminder",
 	"text_body": "Hi Scott, ...",
 	"html_body": "<!doctype html>...",
-	"checkin_url": "https://continuity.whistler.home/checkins/<token>"
+	"checkin_url": "https://continuity.boardmad.com/checkins/<token>"
 }
 
 Error responses:
@@ -221,7 +221,7 @@ scripts/daily_reminder_healthcheck.sh
 
 Environment overrides:
 
-- CONTINUITY_BASE_URL (default: https://continuity.whistler.home)
+- CONTINUITY_BASE_URL (default: https://continuity.boardmad.com)
 - CONTINUITY_STALE_AFTER_SECONDS (default: 3600)
 - CONTINUITY_EVALUATE_FIRST (default: true)
 

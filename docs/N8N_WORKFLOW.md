@@ -35,7 +35,7 @@ After importing:
 Create these variables in n8n:
 
 1. CONTINUITY_API_BASE_URL
-- Preferred public value: https://continuity.whistler.home
+- Preferred public value: https://continuity.boardmad.com
 - Internal Swarm value: http://api:8000
 - Use the public value when n8n runs outside the Docker Swarm network.
 - Use the internal value when n8n runs on the same overlay network as the api service.
@@ -439,7 +439,7 @@ If the workflow appears to do nothing, check these in order.
 4. API base URL correctness
 - Confirm CONTINUITY_API_BASE_URL points to Continuity API, not n8n UI.
 - Correct values:
-  - https://continuity.whistler.home
+  - https://continuity.boardmad.com
   - http://api:8000
 - If Node 2 cannot resolve api, use the public Continuity hostname instead.
 

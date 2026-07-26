@@ -217,7 +217,7 @@ def test_prepare_heartbeat_event_reminder_endpoint() -> None:
             html_body="<p>html reminder</p>",
         ),
     )
-    checkin_url = "https://continuity.whistler.com/checkins/example-token"
+    checkin_url = "https://continuity.boardmad.com/checkins/example-token"
 
     session = MagicMock()
 
@@ -407,7 +407,7 @@ def test_prepare_heartbeat_event_overdue_endpoint() -> None:
             html_body="<p>html overdue</p>",
         ),
     )
-    checkin_url = "https://continuity.whistler.com/checkins/example-token"
+    checkin_url = "https://continuity.boardmad.com/checkins/example-token"
 
     session = MagicMock()
 

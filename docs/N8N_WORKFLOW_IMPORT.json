@@ -36,7 +36,7 @@
       "waitBetweenTries": 2000,
       "parameters": {
         "method": "POST",
-        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/evaluate-due'}}",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.boardmad.com') + '/heartbeat-events/evaluate-due'}}",
         "options": {
           "timeout": 30000
         }
@@ -56,7 +56,7 @@
       "waitBetweenTries": 2000,
       "parameters": {
         "method": "GET",
-        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/pending'}}",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.boardmad.com') + '/heartbeat-events/pending'}}",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -168,7 +168,7 @@
       "waitBetweenTries": 2000,
       "parameters": {
         "method": "POST",
-        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/' + $json.id + '/prepare-reminder'}}",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.boardmad.com') + '/heartbeat-events/' + $json.id + '/prepare-reminder'}}",
         "options": {
           "timeout": 30000
         }
@@ -188,7 +188,7 @@
       "waitBetweenTries": 2000,
       "parameters": {
         "method": "POST",
-        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/' + $json.id + '/prepare-overdue'}}",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.boardmad.com') + '/heartbeat-events/' + $json.id + '/prepare-overdue'}}",
         "options": {
           "timeout": 30000
         }
@@ -208,7 +208,7 @@
       "waitBetweenTries": 2000,
       "parameters": {
         "method": "POST",
-        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/' + $json.id + '/prepare-escalation'}}",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.boardmad.com') + '/heartbeat-events/' + $json.id + '/prepare-escalation'}}",
         "options": {
           "timeout": 30000
         }
@@ -285,7 +285,7 @@
       "waitBetweenTries": 2000,
       "parameters": {
         "method": "POST",
-        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.whistler.home') + '/heartbeat-events/' + $('Code - Expand Event Array').item.json.id + '/delivered'}}",
+        "url": "={{($env.CONTINUITY_API_BASE_URL || 'https://continuity.boardmad.com') + '/heartbeat-events/' + $('Code - Expand Event Array').item.json.id + '/delivered'}}",
         "options": {
           "timeout": 30000
         }

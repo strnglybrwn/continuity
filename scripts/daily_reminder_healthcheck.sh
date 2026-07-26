@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="${CONTINUITY_BASE_URL:-https://continuity.whistler.home}"
+BASE_URL="${CONTINUITY_BASE_URL:-https://continuity.boardmad.com}"
 STALE_AFTER_SECONDS="${CONTINUITY_STALE_AFTER_SECONDS:-3600}"
 EVALUATE_FIRST="${CONTINUITY_EVALUATE_FIRST:-true}"
 

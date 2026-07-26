@@ -6,7 +6,7 @@ This guide describes the current local development workflow for Continuity.
 
 It should be updated whenever application behavior, operational scripts, or deployment flow changes.
 
-Production note: event-driven reminder workflows are orchestrated by n8n in the homelab Swarm. n8n reaches the API internally at http://api:8000 and the platform is externally exposed at https://continuity.whistler.home via Caddy.
+Production note: event-driven reminder workflows are orchestrated by n8n in the homelab Swarm. n8n reaches the API internally at http://api:8000 and the platform is externally exposed at https://continuity.boardmad.com via Caddy.
 
 ## Prerequisites
 
@@ -157,7 +157,7 @@ Optional behavior:
 
 Example run:
 
-CONTINUITY_BASE_URL=https://continuity.whistler.home scripts/mvp_reminder_smoke.sh
+CONTINUITY_BASE_URL=https://continuity.boardmad.com scripts/mvp_reminder_smoke.sh
 
 Network note:
 

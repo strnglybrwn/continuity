@@ -34,7 +34,7 @@ Operationally, workflow orchestration for heartbeat events is handled by an n8n 
 
 6. External workflow orchestrator (n8n)
 - Polls/consumes heartbeat event queue APIs and executes workflow steps for reminder delivery.
-- Reaches Continuity internally at http://api:8000 and is externally published behind Caddy at https://continuity.whistler.home.
+- Reaches Continuity internally at http://api:8000 and is externally published behind Caddy at https://continuity.boardmad.com.
 - Externally reachable n8n endpoint is http://n8n.whistler.home.
 
 ## Implemented Data Model
@@ -141,7 +141,7 @@ In production deployment, one API container and one PostgreSQL container run in 
 - Scheduler evaluates due heartbeats on a fixed interval.
 - n8n consumes pending events from the API and performs workflow delivery steps.
 - Internal service-to-service API endpoint is http://api:8000.
-- External HTTPS entrypoint is https://continuity.whistler.home (via Caddy).
+- External HTTPS entrypoint is https://continuity.boardmad.com (via Caddy).
 - External n8n entrypoint is http://n8n.whistler.home.
 
 ## Security and Reliability Characteristics
