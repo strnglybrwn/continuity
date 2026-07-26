@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -116,6 +116,12 @@ class Heartbeat(Base):
         back_populates="heartbeat",
         cascade="all, delete-orphan",
         order_by=lambda: HeartbeatEvent.occurred_at.desc(),
+    )
+
+    attachments: Mapped[list["HeartbeatAttachment"]] = relationship(
+        back_populates="heartbeat",
+        cascade="all, delete-orphan",
+        order_by=lambda: HeartbeatAttachment.created_at.asc(),
     )
 
 
@@ -256,4 +262,56 @@ class HeartbeatEvent(Base):
 
     heartbeat: Mapped[Heartbeat] = relationship(
         back_populates="events",
+    )
+
+
+class HeartbeatAttachment(Base):
+    __tablename__ = "heartbeat_attachments"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+
+    heartbeat_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("heartbeats.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    filename: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    content_type: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+    )
+
+    size_bytes: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    content_sha256: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+    )
+
+    content_bytes: Mapped[bytes] = mapped_column(
+        LargeBinary,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+
+    heartbeat: Mapped[Heartbeat] = relationship(
+        back_populates="attachments",
     )

@@ -302,7 +302,8 @@
 
         .edit-grid input[type="text"],
         .edit-grid input[type="email"],
-        .edit-grid input[type="number"] {
+        .edit-grid input[type="number"],
+        .edit-grid input[type="file"] {
             width: 100%;
             border-radius: 0.45rem;
             border: 1px solid var(--line);
@@ -434,6 +435,50 @@
         .edit-form button:hover {
             background: #182946;
         }
+
+        .attachment-list {
+            margin: 0.5rem 0 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .attachment-item {
+            border: 1px solid var(--line);
+            border-radius: 0.55rem;
+            background: #fbfdff;
+            padding: 0.45rem 0.55rem;
+            display: flex;
+            justify-content: space-between;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .attachment-item small {
+            color: var(--muted);
+            font-size: 0.8rem;
+        }
+
+        .attachment-delete {
+            margin: 0;
+        }
+
+        .attachment-delete button {
+            border: 0;
+            border-radius: 0.4rem;
+            padding: 0.35rem 0.6rem;
+            background: #8d202e;
+            color: #ffffff;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.82rem;
+        }
+
+        .attachment-delete button:hover {
+            background: #6e1823;
+        }
     </style>
 </head>
 <body>
@@ -479,7 +524,7 @@
             </header>
             <div class="card-grid" style="grid-template-columns: 1fr;">
                 <section class="panel">
-                    <form class="edit-form" method="post" action="/ui/heartbeats">
+                    <form class="edit-form" method="post" action="/ui/heartbeats" enctype="multipart/form-data">
                         <div class="edit-grid">
                             <div class="edit-field">
                                 <label for="new_owner_name">Owner</label>
@@ -508,6 +553,10 @@
                             <div class="edit-field row-span-2">
                                 <label for="new_escalation_contact_email">Escalation contact email</label>
                                 <input id="new_escalation_contact_email" type="email" name="escalation_contact_email">
+                            </div>
+                            <div class="edit-field row-span-2">
+                                <label for="new_attachments">Escalation attachments (PDF, Office docs, images; max 5 files, 250 MB each)</label>
+                                <input id="new_attachments" type="file" name="attachments" multiple>
                             </div>
                         </div>
 
@@ -607,7 +656,7 @@
 
                     <section class="panel">
                         <h3>Configurable Policy</h3>
-                        <form id="{{ form_id }}" class="edit-form" method="post" action="/ui/heartbeats/{{ row.id }}">
+                        <form id="{{ form_id }}" class="edit-form" method="post" action="/ui/heartbeats/{{ row.id }}" enctype="multipart/form-data">
                             <div class="edit-grid">
                                 <div class="edit-field">
                                     <label for="owner_name_{{ row.id }}">Owner</label>
@@ -637,6 +686,10 @@
                                     <label for="escalation_contact_email_{{ row.id }}">Escalation contact email</label>
                                     <input id="escalation_contact_email_{{ row.id }}" type="email" name="escalation_contact_email" value="{{ row.escalation_contact_email or '' }}">
                                 </div>
+                                <div class="edit-field row-span-2">
+                                    <label for="attachments_{{ row.id }}">Add escalation attachments (PDF, Office docs, images; max 5 files, 250 MB each)</label>
+                                    <input id="attachments_{{ row.id }}" type="file" name="attachments" multiple>
+                                </div>
                             </div>
 
                             <div class="toggles">
@@ -654,6 +707,25 @@
                                 <button type="submit">Save Policy</button>
                             </div>
                         </form>
+
+                        <h3 style="margin-top: 1rem;">Escalation Attachments</h3>
+                        {% if row.attachments %}
+                        <ul class="attachment-list">
+                            {% for attachment in row.attachments %}
+                            <li class="attachment-item">
+                                <span>
+                                    <strong>{{ attachment.filename }}</strong><br>
+                                    <small>{{ attachment.content_type }} · {{ attachment.size_bytes }} bytes</small>
+                                </span>
+                                <form class="attachment-delete" method="post" action="/ui/heartbeats/{{ row.id }}/attachments/{{ attachment.id }}/delete" onsubmit="return confirm('Remove this attachment permanently?');">
+                                    <button type="submit">Remove</button>
+                                </form>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="meta">No escalation attachments configured.</p>
+                        {% endif %}
 
                         <form method="post" action="/ui/heartbeats/{{ row.id }}/delete" onsubmit="return confirm('Delete this heartbeat permanently? This cannot be undone.');" style="margin-top: 0.6rem;">
                             <div class="actions">

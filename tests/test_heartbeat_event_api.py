@@ -16,6 +16,7 @@ from app.persistence.database import get_db_session
 from app.persistence.models import Heartbeat, HeartbeatEvent
 from app.services.heartbeat_event_service import (
     EscalationNotificationPreparationError,
+    HeartbeatAttachmentSummary,
     HeartbeatPendingMetrics,
     OverdueNotificationPreparationError,
     ReminderNotificationPreparationError,
@@ -543,7 +544,20 @@ def test_prepare_heartbeat_event_escalation_endpoint() -> None:
     from app.api import heartbeat_events
 
     original = heartbeat_events.prepare_escalation_notification
-    heartbeat_events.prepare_escalation_notification = MagicMock(return_value=(event, notification))
+    heartbeat_events.prepare_escalation_notification = MagicMock(
+        return_value=(
+            event,
+            notification,
+            [
+                HeartbeatAttachmentSummary(
+                    id=uuid4(),
+                    filename="continuity-plan.pdf",
+                    content_type="application/pdf",
+                    size_bytes=2048,
+                )
+            ],
+        )
+    )
 
     try:
         response = TestClient(app).post(f"/heartbeat-events/{event_id}/prepare-escalation")
@@ -552,6 +566,7 @@ def test_prepare_heartbeat_event_escalation_endpoint() -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
+    attachment_id = response.json()["attachments"][0]["id"]
     assert response.json() == {
         "event_id": str(event_id),
         "heartbeat_id": str(heartbeat_id),
@@ -561,6 +576,15 @@ def test_prepare_heartbeat_event_escalation_endpoint() -> None:
         "subject": "Continuity escalation notice",
         "text_body": "text escalation",
         "html_body": "<p>html escalation</p>",
+        "attachments": [
+            {
+                "id": attachment_id,
+                "filename": "continuity-plan.pdf",
+                "content_type": "application/pdf",
+                "size_bytes": 2048,
+                "content_url_path": f"/heartbeat-events/attachments/{attachment_id}/content",
+            }
+        ],
     }
 
 
@@ -614,3 +638,59 @@ def test_prepare_heartbeat_event_escalation_endpoint_returns_409() -> None:
 
     assert response.status_code == 409
     assert response.json() == {"detail": "Heartbeat event is already delivered"}
+
+
+def test_get_heartbeat_attachment_content_endpoint() -> None:
+    attachment_id = uuid4()
+    session = MagicMock()
+
+    attachment = MagicMock()
+    attachment.content_bytes = b"%PDF-1.7"
+    attachment.content_type = "application/pdf"
+    attachment.filename = "summary.pdf"
+    attachment.size_bytes = 8
+
+    from app.api import heartbeat_events
+
+    original = heartbeat_events.get_attachment_content
+    heartbeat_events.get_attachment_content = MagicMock(return_value=attachment)
+
+    def override_database_session():
+        yield session
+
+    app.dependency_overrides[get_db_session] = override_database_session
+
+    try:
+        response = TestClient(app).get(f"/heartbeat-events/attachments/{attachment_id}/content")
+    finally:
+        heartbeat_events.get_attachment_content = original
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.content == b"%PDF-1.7"
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["content-length"] == "8"
+
+
+def test_get_heartbeat_attachment_content_endpoint_returns_404() -> None:
+    attachment_id = uuid4()
+    session = MagicMock()
+
+    from app.api import heartbeat_events
+
+    original = heartbeat_events.get_attachment_content
+    heartbeat_events.get_attachment_content = MagicMock(return_value=None)
+
+    def override_database_session():
+        yield session
+
+    app.dependency_overrides[get_db_session] = override_database_session
+
+    try:
+        response = TestClient(app).get(f"/heartbeat-events/attachments/{attachment_id}/content")
+    finally:
+        heartbeat_events.get_attachment_content = original
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Heartbeat attachment not found"}

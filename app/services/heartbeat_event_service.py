@@ -9,6 +9,10 @@ from app.core.clock import Clock, utc_now
 from app.domain.heartbeat import HeartbeatEventType
 from app.domain.notification import Notification
 from app.persistence.models import HeartbeatEvent
+from app.services.heartbeat_attachment_service import (
+    HeartbeatAttachmentSummary,
+    list_heartbeat_attachment_summaries,
+)
 from app.services.checkin_token_service import issue_checkin_token
 from app.services.heartbeat_service import heartbeat_escalation_at
 from app.services.notification_service import (
@@ -156,7 +160,7 @@ def prepare_overdue_notification(
 def prepare_escalation_notification(
     session: Session,
     event_id: UUID,
-) -> tuple[HeartbeatEvent, Notification]:
+) -> tuple[HeartbeatEvent, Notification, list[HeartbeatAttachmentSummary]]:
     """Create a send-ready escalation payload for one pending escalation event."""
     event = session.get(
         HeartbeatEvent,
@@ -181,8 +185,9 @@ def prepare_escalation_notification(
         )
 
     notification = build_escalation_notification(heartbeat)
+    attachments = list_heartbeat_attachment_summaries(heartbeat)
 
-    return event, notification
+    return event, notification, attachments
 
 
 def list_pending_heartbeat_events(

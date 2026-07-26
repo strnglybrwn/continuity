@@ -8,9 +8,10 @@ Build one n8n workflow that:
 2. Polls Continuity for pending heartbeat events
 3. Branches by event_type: reminder_due, overdue, escalation_due
 4. Prepares the matching payload (with a one-time check-in URL for reminder_due and overdue; no check-in URL for escalation_due)
-5. Sends the matching email (to the owner for reminder_due/overdue, to the escalation contact for escalation_due)
-6. Marks event delivered only after successful send
-7. Optionally reports queue staleness from /heartbeat-events/metrics for operator alerting
+5. For escalation_due, fetches configured heartbeat attachments via attachment content URLs
+6. Sends the matching email (to the owner for reminder_due/overdue, to the escalation contact for escalation_due)
+7. Marks event delivered only after successful send
+8. Optionally reports queue staleness from /heartbeat-events/metrics for operator alerting
 
 Three event types now flow through this workflow:
 
@@ -243,8 +244,34 @@ return payload.map((event) => ({ json: event }));
 - subject
 - text_body
 - html_body
+- attachments (array)
+  - id
+  - filename
+  - content_type
+  - size_bytes
+  - content_url_path
 
 Note: no checkin_url field — the escalation-contact email is informational only and does not carry a check-in action link.
+
+### Node 6d
+
+1. Name
+- HTTP - Download Escalation Attachment
+
+2. Type
+- HTTP Request
+
+3. Key config
+- Method: GET
+- URL: {{$env.CONTINUITY_API_BASE_URL}}{{$json.content_url_path}}
+- Response Format: File
+- Timeout: 30000
+- Retry On Fail: true
+- Max Tries: 3
+- Wait Between Tries: 2000
+
+4. Purpose
+- Download each escalation attachment and pass as binary data to the escalation email node.
 
 ### Node 7a
 
@@ -301,6 +328,7 @@ Note: no checkin_url field — the escalation-contact email is informational onl
 - Subject: {{$json.subject}}
 - Text: {{$json.text_body}}
 - HTML: {{$json.html_body}}
+- Attachments: include binaries produced by "HTTP - Download Escalation Attachment"
 - Continue On Fail: false
 
 4. Operational rule
