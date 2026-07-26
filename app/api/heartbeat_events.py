@@ -19,6 +19,7 @@ from app.api.heartbeat_schemas import (
 from app.config import settings
 from app.persistence.database import get_db_session
 from app.persistence.models import HeartbeatEvent
+from app.services.heartbeat_attachment_service import get_attachment_content
 from app.services.heartbeat_event_service import (
     EscalationNotificationPreparationError,
     OverdueNotificationPreparationError,
@@ -30,7 +31,6 @@ from app.services.heartbeat_event_service import (
     prepare_overdue_notification,
     prepare_reminder_notification,
 )
-from app.services.heartbeat_attachment_service import get_attachment_content
 from app.services.heartbeat_service import evaluate_due_heartbeats
 
 router = APIRouter(

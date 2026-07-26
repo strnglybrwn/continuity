@@ -15,6 +15,13 @@ from app.api.heartbeat_schemas import HeartbeatCreate
 from app.config import settings
 from app.core.clock import utc_now
 from app.persistence.database import get_db_session
+from app.services.heartbeat_attachment_service import (
+    AttachmentValidationError,
+    add_heartbeat_attachments,
+    delete_heartbeat_attachment,
+    parse_uploads,
+    sanitize_uploads,
+)
 from app.services.heartbeat_service import (
     create_heartbeat,
     delete_heartbeat,
@@ -24,13 +31,6 @@ from app.services.heartbeat_service import (
     is_heartbeat_reminder_due,
     list_heartbeats,
     update_heartbeat_dashboard_settings,
-)
-from app.services.heartbeat_attachment_service import (
-    AttachmentValidationError,
-    add_heartbeat_attachments,
-    delete_heartbeat_attachment,
-    parse_uploads,
-    sanitize_uploads,
 )
 
 router = APIRouter(
@@ -252,7 +252,7 @@ def create_heartbeat_dashboard(
     escalation_delay_days: int = Form(1),
     escalation_contact_name: str | None = Form(None),
     escalation_contact_email: str | None = Form(None),
-    attachments: list[UploadFile] = File(default=[]),
+    attachments: Annotated[list[UploadFile] | None, File()] = None,
 ) -> RedirectResponse:
     escalation_contact_name_normalized = (
         escalation_contact_name.strip() if escalation_contact_name else None
@@ -279,7 +279,7 @@ def create_heartbeat_dashboard(
             status_code=303,
         )
 
-    cleaned_uploads = sanitize_uploads(attachments)
+    cleaned_uploads = sanitize_uploads(attachments or [])
 
     try:
         parsed_uploads = parse_uploads(cleaned_uploads)
@@ -352,7 +352,7 @@ def update_heartbeat_dashboard(
     escalation_contact_name: str | None = Form(None),
     escalation_contact_email: str | None = Form(None),
     arm_reminder_now: bool = Form(False),
-    attachments: list[UploadFile] = File(default=[]),
+    attachments: Annotated[list[UploadFile] | None, File()] = None,
 ) -> RedirectResponse:
     escalation_contact_name_normalized = (
         escalation_contact_name.strip() if escalation_contact_name else None
@@ -410,7 +410,7 @@ def update_heartbeat_dashboard(
             status_code=303,
         )
 
-    cleaned_uploads = sanitize_uploads(attachments)
+    cleaned_uploads = sanitize_uploads(attachments or [])
 
     try:
         parsed_uploads = parse_uploads(cleaned_uploads)
