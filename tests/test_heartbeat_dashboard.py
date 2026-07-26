@@ -4,8 +4,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app.domain.heartbeat import HeartbeatEventType
-from app.domain.heartbeat import HeartbeatStatus
+from app.domain.heartbeat import HeartbeatEventType, HeartbeatStatus
 from app.main import app
 from app.persistence.database import get_db_session
 from app.persistence.models import Heartbeat, HeartbeatEvent
