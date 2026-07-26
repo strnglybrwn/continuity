@@ -120,6 +120,14 @@ class HeartbeatOverdueNotificationResponse(BaseModel):
     checkin_url: str
 
 
+class HeartbeatEscalationAttachmentResponse(BaseModel):
+    id: UUID
+    filename: str
+    content_type: str
+    size_bytes: int
+    content_url_path: str
+
+
 class HeartbeatEscalationNotificationResponse(BaseModel):
     event_id: UUID
     heartbeat_id: UUID
@@ -129,6 +137,7 @@ class HeartbeatEscalationNotificationResponse(BaseModel):
     subject: str
     text_body: str
     html_body: str
+    attachments: list[HeartbeatEscalationAttachmentResponse]
 
 
 class HeartbeatEventEvaluationResponse(BaseModel):

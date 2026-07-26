@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationError, model_validator
@@ -24,6 +24,13 @@ from app.services.heartbeat_service import (
     is_heartbeat_reminder_due,
     list_heartbeats,
     update_heartbeat_dashboard_settings,
+)
+from app.services.heartbeat_attachment_service import (
+    AttachmentValidationError,
+    add_heartbeat_attachments,
+    delete_heartbeat_attachment,
+    parse_uploads,
+    sanitize_uploads,
 )
 
 router = APIRouter(
@@ -206,6 +213,15 @@ def list_heartbeats_dashboard(
                     escalation_at=escalation_at,
                     now=now,
                 ),
+                "attachments": [
+                    {
+                        "id": str(attachment.id),
+                        "filename": attachment.filename,
+                        "content_type": attachment.content_type,
+                        "size_bytes": attachment.size_bytes,
+                    }
+                    for attachment in heartbeat.attachments
+                ],
             }
         )
 
@@ -236,6 +252,7 @@ def create_heartbeat_dashboard(
     escalation_delay_days: int = Form(1),
     escalation_contact_name: str | None = Form(None),
     escalation_contact_email: str | None = Form(None),
+    attachments: list[UploadFile] = File(default=[]),
 ) -> RedirectResponse:
     escalation_contact_name_normalized = (
         escalation_contact_name.strip() if escalation_contact_name else None
@@ -262,7 +279,36 @@ def create_heartbeat_dashboard(
             status_code=303,
         )
 
+    cleaned_uploads = sanitize_uploads(attachments)
+
+    try:
+        parsed_uploads = parse_uploads(cleaned_uploads)
+    except AttachmentValidationError as exc:
+        return RedirectResponse(
+            url=f"/ui/heartbeats?{urlencode({'error': str(exc)})}",
+            status_code=303,
+        )
+
     heartbeat = create_heartbeat(session, payload)
+
+    try:
+        add_heartbeat_attachments(
+            session,
+            heartbeat.id,
+            parsed_uploads,
+        )
+    except AttachmentValidationError as exc:
+        deleted = delete_heartbeat(session, heartbeat.id)
+        if not deleted:
+            return RedirectResponse(
+                url=f"/ui/heartbeats?{urlencode({'error': str(exc)})}",
+                status_code=303,
+            )
+
+        return RedirectResponse(
+            url=f"/ui/heartbeats?{urlencode({'error': str(exc)})}",
+            status_code=303,
+        )
 
     return RedirectResponse(
         url=f"/ui/heartbeats?{urlencode({'created': str(heartbeat.id)})}",
@@ -306,6 +352,7 @@ def update_heartbeat_dashboard(
     escalation_contact_name: str | None = Form(None),
     escalation_contact_email: str | None = Form(None),
     arm_reminder_now: bool = Form(False),
+    attachments: list[UploadFile] = File(default=[]),
 ) -> RedirectResponse:
     escalation_contact_name_normalized = (
         escalation_contact_name.strip() if escalation_contact_name else None
@@ -363,7 +410,48 @@ def update_heartbeat_dashboard(
             status_code=303,
         )
 
+    cleaned_uploads = sanitize_uploads(attachments)
+
+    try:
+        parsed_uploads = parse_uploads(cleaned_uploads)
+        add_heartbeat_attachments(
+            session,
+            heartbeat.id,
+            parsed_uploads,
+        )
+    except AttachmentValidationError as exc:
+        return RedirectResponse(
+            url=f"/ui/heartbeats?{urlencode({'error': str(exc)})}",
+            status_code=303,
+        )
+
     return RedirectResponse(
         url=f"/ui/heartbeats?{urlencode({'updated': str(heartbeat.id)})}",
+        status_code=303,
+    )
+
+
+@router.post(
+    "/heartbeats/{heartbeat_id}/attachments/{attachment_id}/delete",
+)
+def delete_heartbeat_attachment_dashboard(
+    heartbeat_id: UUID,
+    attachment_id: UUID,
+    session: DatabaseSession,
+) -> RedirectResponse:
+    deleted = delete_heartbeat_attachment(
+        session,
+        heartbeat_id,
+        attachment_id,
+    )
+
+    if not deleted:
+        return RedirectResponse(
+            url=f"/ui/heartbeats?{urlencode({'error': 'Attachment not found'})}",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url=f"/ui/heartbeats?{urlencode({'updated': str(heartbeat_id)})}",
         status_code=303,
     )

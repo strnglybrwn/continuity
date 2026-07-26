@@ -49,6 +49,8 @@ The schema is represented by SQLAlchemy models and Alembic migrations.
 	- One-time token hashes, expiry, redemption timestamp.
 - heartbeat_events
 	- Event log/queue for reminder, overdue, checked-in, and escalation event types.
+- heartbeat_attachments
+	- Escalation-only binary attachments (PDF/Office/image) associated with a heartbeat.
 
 Current migration chain:
 
@@ -120,6 +122,7 @@ Implemented today:
 4. Event queue metrics expose stale queue alerts for operations.
 5. Dashboard updates support operational edits of owner identity, recipient,
    lifecycle interval/reminder windows, and reminder-window arming.
+7. Final escalation payload preparation includes attachment metadata and download paths for n8n to fetch binaries before sending escalation email.
 
 Not yet wired end-to-end:
 

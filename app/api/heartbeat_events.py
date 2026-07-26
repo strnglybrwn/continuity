@@ -1,10 +1,13 @@
 from typing import Annotated
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.heartbeat_schemas import (
+    HeartbeatEscalationAttachmentResponse,
     HeartbeatEscalationNotificationResponse,
     HeartbeatEventDeliveredResponse,
     HeartbeatEventEvaluationResponse,
@@ -27,6 +30,7 @@ from app.services.heartbeat_event_service import (
     prepare_overdue_notification,
     prepare_reminder_notification,
 )
+from app.services.heartbeat_attachment_service import get_attachment_content
 from app.services.heartbeat_service import evaluate_due_heartbeats
 
 router = APIRouter(
@@ -214,7 +218,7 @@ def prepare_heartbeat_event_escalation_endpoint(
     session: DatabaseSession,
 ) -> HeartbeatEscalationNotificationResponse:
     try:
-        event, notification = prepare_escalation_notification(
+        event, notification, attachments = prepare_escalation_notification(
             session,
             event_id,
         )
@@ -247,6 +251,47 @@ def prepare_heartbeat_event_escalation_endpoint(
         subject=notification.message.subject,
         text_body=notification.message.text_body,
         html_body=notification.message.html_body,
+        attachments=[
+            HeartbeatEscalationAttachmentResponse(
+                id=attachment.id,
+                filename=attachment.filename,
+                content_type=attachment.content_type,
+                size_bytes=attachment.size_bytes,
+                content_url_path=f"/heartbeat-events/attachments/{attachment.id}/content",
+            )
+            for attachment in attachments
+        ],
+    )
+
+
+@router.get(
+    "/attachments/{attachment_id}/content",
+)
+def get_heartbeat_attachment_content_endpoint(
+    attachment_id: UUID,
+    session: DatabaseSession,
+) -> Response:
+    attachment = get_attachment_content(
+        session,
+        attachment_id,
+    )
+
+    if attachment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Heartbeat attachment not found",
+        )
+
+    filename = quote(attachment.filename, safe="")
+
+    return Response(
+        content=attachment.content_bytes,
+        media_type=attachment.content_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(attachment.size_bytes),
+            "Cache-Control": "no-store",
+        },
     )
 
 
