@@ -4,10 +4,11 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from app.domain.heartbeat import HeartbeatEventType
 from app.domain.heartbeat import HeartbeatStatus
 from app.main import app
 from app.persistence.database import get_db_session
-from app.persistence.models import Heartbeat
+from app.persistence.models import Heartbeat, HeartbeatEvent
 
 
 def override_session(session: MagicMock):
@@ -76,6 +77,67 @@ def test_heartbeat_dashboard_empty_state(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert "No heartbeats found yet." in response.text
+
+
+def test_heartbeat_dashboard_prefers_pending_event_timestamps_for_timeline(monkeypatch) -> None:
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.OVERDUE,
+        interval_days=2,
+        reminder_days=0,
+        escalation_enabled=True,
+        escalation_delay_days=1,
+        escalation_contact_name="Ops",
+        escalation_contact_email="ops@example.com",
+        last_checkin_at=datetime(2026, 7, 24, 20, 0, tzinfo=UTC),
+        next_due_at=datetime(2026, 7, 26, 20, 5, tzinfo=UTC),
+        created_at=datetime(2026, 7, 20, 20, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 7, 26, 20, 0, tzinfo=UTC),
+    )
+    heartbeat.events = [
+        HeartbeatEvent(
+            id=uuid4(),
+            heartbeat_id=heartbeat.id,
+            event_type=HeartbeatEventType.REMINDER_DUE,
+            occurred_at=datetime(2026, 7, 26, 20, 0, tzinfo=UTC),
+            created_at=datetime(2026, 7, 26, 20, 0, tzinfo=UTC),
+        ),
+        HeartbeatEvent(
+            id=uuid4(),
+            heartbeat_id=heartbeat.id,
+            event_type=HeartbeatEventType.OVERDUE,
+            occurred_at=datetime(2026, 7, 26, 20, 5, tzinfo=UTC),
+            created_at=datetime(2026, 7, 26, 20, 5, tzinfo=UTC),
+        ),
+        HeartbeatEvent(
+            id=uuid4(),
+            heartbeat_id=heartbeat.id,
+            event_type=HeartbeatEventType.ESCALATION_DUE,
+            occurred_at=datetime(2026, 7, 26, 20, 10, tzinfo=UTC),
+            created_at=datetime(2026, 7, 26, 20, 10, tzinfo=UTC),
+        ),
+    ]
+
+    monkeypatch.setattr(
+        "app.api.heartbeat_dashboard.list_heartbeats",
+        lambda _session: [heartbeat],
+    )
+
+    session = MagicMock()
+    app.dependency_overrides[get_db_session] = override_session(session)
+
+    try:
+        client = TestClient(app)
+        response = client.get("/ui/heartbeats")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert "26/07/2026 21:00 BST" in response.text
+    assert "26/07/2026 21:05 BST" in response.text
+    assert "26/07/2026 21:10 BST" in response.text
 
 
 def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.heartbeat_schemas import HeartbeatCreate
 from app.config import settings
 from app.core.clock import utc_now
+from app.domain.heartbeat import HeartbeatEventType
 from app.persistence.database import get_db_session
 from app.services.heartbeat_attachment_service import (
     AttachmentValidationError,
@@ -112,9 +113,33 @@ def _next_actions(
     next_due_at: datetime,
     escalation_enabled: bool,
     escalation_at: datetime,
+    pending_event_times: dict[HeartbeatEventType, datetime],
     now: datetime,
 ) -> list[dict[str, str]]:
     actions: list[dict[str, str]] = []
+
+    if pending_event_times:
+        pending_action_map = [
+            (HeartbeatEventType.REMINDER_DUE, "Send reminder to owner"),
+            (HeartbeatEventType.OVERDUE, "Send overdue warning to owner"),
+            (HeartbeatEventType.ESCALATION_DUE, "Send escalation notice to contact"),
+        ]
+
+        for event_type, label in pending_action_map:
+            occurred_at = pending_event_times.get(event_type)
+            if occurred_at is None:
+                continue
+
+            actions.append(
+                {
+                    "label": label,
+                    "time": _format_dashboard_datetime(occurred_at),
+                    "state": "pending" if occurred_at > now else "ready",
+                }
+            )
+
+        if actions:
+            return actions
 
     if status == "active" and reminder_days > 0:
         actions.append(
@@ -155,6 +180,27 @@ def _next_actions(
     return actions
 
 
+def _pending_lifecycle_event_times(heartbeat: Any) -> dict[HeartbeatEventType, datetime]:
+    pending_times: dict[HeartbeatEventType, datetime] = {}
+
+    for event in heartbeat.events:
+        if event.delivered_at is not None:
+            continue
+
+        if event.event_type not in {
+            HeartbeatEventType.REMINDER_DUE,
+            HeartbeatEventType.OVERDUE,
+            HeartbeatEventType.ESCALATION_DUE,
+        }:
+            continue
+
+        previous = pending_times.get(event.event_type)
+        if previous is None or event.occurred_at < previous:
+            pending_times[event.event_type] = event.occurred_at
+
+    return pending_times
+
+
 @router.get(
     "/heartbeats",
     response_class=HTMLResponse,
@@ -170,6 +216,19 @@ def list_heartbeats_dashboard(
     for heartbeat in heartbeats:
         reminder_at = heartbeat_reminder_at(heartbeat)
         escalation_at = heartbeat_escalation_at(heartbeat)
+        pending_event_times = _pending_lifecycle_event_times(heartbeat)
+        reminder_timeline_at = pending_event_times.get(
+            HeartbeatEventType.REMINDER_DUE,
+            reminder_at,
+        )
+        overdue_timeline_at = pending_event_times.get(
+            HeartbeatEventType.OVERDUE,
+            heartbeat.next_due_at,
+        )
+        escalation_timeline_at = pending_event_times.get(
+            HeartbeatEventType.ESCALATION_DUE,
+            escalation_at,
+        )
         reminder_due = is_heartbeat_reminder_due(heartbeat, now=now)
         escalation_due = is_heartbeat_escalation_due(heartbeat, now=now)
 
@@ -188,13 +247,13 @@ def list_heartbeats_dashboard(
                 "last_checkin_at": heartbeat.last_checkin_at,
                 "next_due_at": heartbeat.next_due_at,
                 "reminder_at_display": _format_dashboard_datetime(
-                    reminder_at,
+                    reminder_timeline_at,
                 ),
                 "next_due_at_display": _format_dashboard_datetime(
-                    heartbeat.next_due_at,
+                    overdue_timeline_at,
                 ),
                 "escalation_at_display": _format_dashboard_datetime(
-                    escalation_at,
+                    escalation_timeline_at,
                 ),
                 "reminder_at": reminder_at,
                 "is_reminder_due": reminder_due,
@@ -207,10 +266,11 @@ def list_heartbeats_dashboard(
                 "next_actions": _next_actions(
                     status=heartbeat.status.value,
                     reminder_days=heartbeat.reminder_days,
-                    reminder_at=reminder_at,
-                    next_due_at=heartbeat.next_due_at,
+                    reminder_at=reminder_timeline_at,
+                    next_due_at=overdue_timeline_at,
                     escalation_enabled=bool(heartbeat.escalation_enabled),
-                    escalation_at=escalation_at,
+                    escalation_at=escalation_timeline_at,
+                    pending_event_times=pending_event_times,
                     now=now,
                 ),
                 "attachments": [
