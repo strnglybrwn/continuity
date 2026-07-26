@@ -177,8 +177,17 @@ def test_heartbeat_dashboard_uses_delivered_event_times_for_timeline(monkeypatch
             id=uuid4(),
             heartbeat_id=heartbeat.id,
             event_type=HeartbeatEventType.ESCALATION_DUE,
-            occurred_at=datetime(2026, 7, 27, 20, 5, tzinfo=UTC),
-            created_at=datetime(2026, 7, 27, 20, 5, tzinfo=UTC),
+            occurred_at=datetime(2026, 7, 26, 20, 10, tzinfo=UTC),
+            delivered_at=datetime(2026, 7, 26, 20, 10, 30, tzinfo=UTC),
+            created_at=datetime(2026, 7, 26, 20, 10, tzinfo=UTC),
+        ),
+        HeartbeatEvent(
+            id=uuid4(),
+            heartbeat_id=heartbeat.id,
+            event_type=HeartbeatEventType.ESCALATION_DUE,
+            occurred_at=datetime(2030, 1, 1, 0, 0, tzinfo=UTC),
+            delivered_at=datetime(2026, 7, 26, 20, 11, tzinfo=UTC),
+            created_at=datetime(2026, 7, 26, 20, 11, tzinfo=UTC),
         ),
     ]
 
@@ -199,7 +208,7 @@ def test_heartbeat_dashboard_uses_delivered_event_times_for_timeline(monkeypatch
     assert response.status_code == 200
     assert "26/07/2026 21:00 BST" in response.text
     assert "26/07/2026 21:05 BST" in response.text
-    assert "27/07/2026 21:05 BST" in response.text
+    assert "26/07/2026 21:10 BST" in response.text
 
 
 def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:

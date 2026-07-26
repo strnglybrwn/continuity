@@ -212,6 +212,34 @@ def _lifecycle_event_times(
     return event_times
 
 
+def _latest_delivered_lifecycle_event_times(
+    heartbeat: Any,
+    *,
+    now: datetime,
+) -> dict[HeartbeatEventType, datetime]:
+    delivered_times: dict[HeartbeatEventType, datetime] = {}
+
+    for event in heartbeat.events:
+        if event.delivered_at is None:
+            continue
+
+        if event.occurred_at > now:
+            continue
+
+        if event.event_type not in {
+            HeartbeatEventType.REMINDER_DUE,
+            HeartbeatEventType.OVERDUE,
+            HeartbeatEventType.ESCALATION_DUE,
+        }:
+            continue
+
+        previous = delivered_times.get(event.event_type)
+        if previous is None or event.occurred_at > previous:
+            delivered_times[event.event_type] = event.occurred_at
+
+    return delivered_times
+
+
 @router.get(
     "/heartbeats",
     response_class=HTMLResponse,
@@ -231,21 +259,31 @@ def list_heartbeats_dashboard(
             heartbeat,
             pending_only=True,
         )
-        lifecycle_event_times = _lifecycle_event_times(
+        delivered_event_times = _latest_delivered_lifecycle_event_times(
             heartbeat,
-            pending_only=False,
+            now=now,
         )
-        reminder_timeline_at = lifecycle_event_times.get(
+
+        reminder_timeline_at = pending_event_times.get(
             HeartbeatEventType.REMINDER_DUE,
-            reminder_at,
+            delivered_event_times.get(
+                HeartbeatEventType.REMINDER_DUE,
+                reminder_at,
+            ),
         )
-        overdue_timeline_at = lifecycle_event_times.get(
+        overdue_timeline_at = pending_event_times.get(
             HeartbeatEventType.OVERDUE,
-            heartbeat.next_due_at,
+            delivered_event_times.get(
+                HeartbeatEventType.OVERDUE,
+                heartbeat.next_due_at,
+            ),
         )
-        escalation_timeline_at = lifecycle_event_times.get(
+        escalation_timeline_at = pending_event_times.get(
             HeartbeatEventType.ESCALATION_DUE,
-            escalation_at,
+            delivered_event_times.get(
+                HeartbeatEventType.ESCALATION_DUE,
+                escalation_at,
+            ),
         )
         reminder_due = is_heartbeat_reminder_due(heartbeat, now=now)
         escalation_due = is_heartbeat_escalation_due(heartbeat, now=now)
