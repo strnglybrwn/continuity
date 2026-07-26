@@ -9,11 +9,11 @@ from app.core.clock import Clock, utc_now
 from app.domain.heartbeat import HeartbeatEventType
 from app.domain.notification import Notification
 from app.persistence.models import HeartbeatEvent
+from app.services.checkin_token_service import issue_checkin_token
 from app.services.heartbeat_attachment_service import (
     HeartbeatAttachmentSummary,
     list_heartbeat_attachment_summaries,
 )
-from app.services.checkin_token_service import issue_checkin_token
 from app.services.heartbeat_service import heartbeat_escalation_at
 from app.services.notification_service import (
     build_escalation_notification,
