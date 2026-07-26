@@ -77,7 +77,6 @@ class HeartbeatAttachmentSummary:
     size_bytes: int
 
 
-
 def sanitize_uploads(uploads: list[UploadFile]) -> list[UploadFile]:
     """Drop empty form parts from multi-file inputs."""
     return [upload for upload in uploads if upload.filename and upload.filename.strip()]

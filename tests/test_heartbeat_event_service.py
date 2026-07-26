@@ -435,6 +435,7 @@ def test_prepare_escalation_notification_returns_send_ready_payload(
     event.heartbeat.owner_name = "Scott"
     event.heartbeat.escalation_contact_name = "Jamie"
     event.heartbeat.escalation_contact_email = "jamie@example.com"
+    event.heartbeat.attachments = []
 
     session = MagicMock()
     session.get.return_value = event
@@ -458,13 +459,14 @@ def test_prepare_escalation_notification_returns_send_ready_payload(
         MagicMock(return_value=notification),
     )
 
-    prepared_event, prepared_notification = prepare_escalation_notification(
+    prepared_event, prepared_notification, prepared_attachments = prepare_escalation_notification(
         session,
         event_id,
     )
 
     assert prepared_event is event
     assert prepared_notification is notification
+    assert prepared_attachments == []
 
 
 def test_prepare_escalation_notification_rejects_non_escalation_event() -> None:
