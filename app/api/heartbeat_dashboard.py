@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlencode
@@ -16,6 +16,7 @@ from app.config import settings
 from app.core.clock import utc_now
 from app.domain.heartbeat import HeartbeatEventType
 from app.persistence.database import get_db_session
+from app.persistence.models import Heartbeat
 from app.services.heartbeat_attachment_service import (
     AttachmentValidationError,
     add_heartbeat_attachments,
@@ -51,22 +52,12 @@ class HeartbeatDashboardUpdate(BaseModel):
 
     owner_name: str = Field(min_length=1, max_length=200)
     owner_email: EmailStr
-    interval_days: int = Field(ge=1, le=365)
-    reminder_days: int = Field(ge=0, le=364)
     escalation_enabled: bool = False
-    escalation_delay_days: int = Field(ge=1, le=365)
     escalation_contact_name: str | None = Field(default=None, min_length=1, max_length=200)
     escalation_contact_email: EmailStr | None = None
-    arm_reminder_now: bool = False
 
     @model_validator(mode="after")
     def validate_reminder_less_than_interval(self) -> "HeartbeatDashboardUpdate":
-        if self.reminder_days >= self.interval_days:
-            raise ValueError("reminder_days must be less than interval_days")
-
-        if self.escalation_delay_days > self.interval_days:
-            raise ValueError("escalation_delay_days must be less than or equal to interval_days")
-
         if self.escalation_enabled and not self.escalation_contact_name:
             raise ValueError("escalation_contact_name is required when escalation_enabled is true")
 
@@ -76,6 +67,9 @@ class HeartbeatDashboardUpdate(BaseModel):
 
 
 DASHBOARD_TIMEZONE = ZoneInfo(settings.dashboard_display_timezone)
+DEFAULT_INTERVAL_DAYS = 30
+DEFAULT_REMINDER_DAYS = 7
+DEFAULT_ESCALATION_DELAY_DAYS = 1
 
 
 def _format_dashboard_datetime(value: datetime | None) -> str:
@@ -85,6 +79,35 @@ def _format_dashboard_datetime(value: datetime | None) -> str:
     localized = value.astimezone(DASHBOARD_TIMEZONE)
 
     return localized.strftime("%d/%m/%Y %H:%M %Z")
+
+
+def _format_dashboard_datetime_input(value: datetime) -> str:
+    return value.astimezone(DASHBOARD_TIMEZONE).strftime("%Y-%m-%dT%H:%M")
+
+
+def _parse_dashboard_datetime_input(*, raw_value: str, field_name: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a valid date and time") from exc
+
+    localized = parsed.replace(tzinfo=DASHBOARD_TIMEZONE)
+    return localized.astimezone(UTC)
+
+
+def _lifecycle_days_between(*, earlier: datetime, later: datetime, field_name: str) -> int:
+    delta_seconds = int((later - earlier).total_seconds())
+
+    if delta_seconds < 0:
+        raise ValueError(f"{field_name} must be after the previous lifecycle stage")
+
+    day_seconds = settings.effective_lifecycle_day_seconds
+    if delta_seconds % day_seconds != 0:
+        raise ValueError(
+            f"{field_name} must align to whole lifecycle days of {day_seconds} seconds"
+        )
+
+    return delta_seconds // day_seconds
 
 
 def _risk_label(
@@ -312,6 +335,9 @@ def list_heartbeats_dashboard(
                     escalation_timeline_at,
                 ),
                 "reminder_at": reminder_at,
+                "reminder_at_input": _format_dashboard_datetime_input(reminder_timeline_at),
+                "next_due_at_input": _format_dashboard_datetime_input(overdue_timeline_at),
+                "escalation_at_input": _format_dashboard_datetime_input(escalation_timeline_at),
                 "is_reminder_due": reminder_due,
                 "is_escalation_due": escalation_due,
                 "risk_label": _risk_label(
@@ -362,10 +388,7 @@ def create_heartbeat_dashboard(
     session: DatabaseSession,
     owner_name: str = Form(...),
     owner_email: str = Form(...),
-    interval_days: int = Form(...),
-    reminder_days: int = Form(...),
     escalation_enabled: bool = Form(False),
-    escalation_delay_days: int = Form(1),
     escalation_contact_name: str | None = Form(None),
     escalation_contact_email: str | None = Form(None),
     attachments: Annotated[list[UploadFile] | None, File()] = None,
@@ -381,10 +404,10 @@ def create_heartbeat_dashboard(
         payload = HeartbeatCreate(
             owner_name=owner_name,
             owner_email=owner_email,
-            interval_days=interval_days,
-            reminder_days=reminder_days,
+            interval_days=DEFAULT_INTERVAL_DAYS,
+            reminder_days=DEFAULT_REMINDER_DAYS,
             escalation_enabled=escalation_enabled,
-            escalation_delay_days=escalation_delay_days,
+            escalation_delay_days=DEFAULT_ESCALATION_DELAY_DAYS,
             escalation_contact_name=escalation_contact_name_normalized,
             escalation_contact_email=escalation_contact_email_normalized,
         )
@@ -461,13 +484,12 @@ def update_heartbeat_dashboard(
     session: DatabaseSession,
     owner_name: str = Form(...),
     owner_email: str = Form(...),
-    interval_days: int = Form(...),
-    reminder_days: int = Form(...),
     escalation_enabled: bool = Form(False),
-    escalation_delay_days: int = Form(1),
     escalation_contact_name: str | None = Form(None),
     escalation_contact_email: str | None = Form(None),
-    arm_reminder_now: bool = Form(False),
+    reminder_at: str = Form(...),
+    overdue_at: str = Form(...),
+    escalation_at: str = Form(...),
     attachments: Annotated[list[UploadFile] | None, File()] = None,
 ) -> RedirectResponse:
     escalation_contact_name_normalized = (
@@ -481,18 +503,73 @@ def update_heartbeat_dashboard(
         payload = HeartbeatDashboardUpdate(
             owner_name=owner_name,
             owner_email=owner_email,
-            interval_days=interval_days,
-            reminder_days=reminder_days,
             escalation_enabled=escalation_enabled,
-            escalation_delay_days=escalation_delay_days,
             escalation_contact_name=escalation_contact_name_normalized,
             escalation_contact_email=escalation_contact_email_normalized,
-            arm_reminder_now=arm_reminder_now,
         )
     except ValidationError as exc:
         message = exc.errors()[0]["msg"]
         return RedirectResponse(
             url=f"/ui/heartbeats?{urlencode({'error': message})}",
+            status_code=303,
+        )
+
+    heartbeat = session.get(Heartbeat, heartbeat_id)
+
+    if heartbeat is None:
+        return RedirectResponse(
+            url=f"/ui/heartbeats?{urlencode({'error': 'Heartbeat not found'})}",
+            status_code=303,
+        )
+
+    try:
+        reminder_at_utc = _parse_dashboard_datetime_input(
+            raw_value=reminder_at,
+            field_name="Reminder time",
+        )
+        overdue_at_utc = _parse_dashboard_datetime_input(
+            raw_value=overdue_at,
+            field_name="Overdue time",
+        )
+        escalation_at_utc = _parse_dashboard_datetime_input(
+            raw_value=escalation_at,
+            field_name="Escalation time",
+        )
+
+        current_time = utc_now()
+        base_time = (
+            heartbeat.last_checkin_at
+            if heartbeat.last_checkin_at is not None
+            else heartbeat.created_at
+        )
+
+        interval_days = _lifecycle_days_between(
+            earlier=base_time,
+            later=overdue_at_utc,
+            field_name="Overdue time",
+        )
+        if interval_days < 1:
+            raise ValueError("Overdue time must be at least 1 lifecycle day after baseline")
+
+        reminder_days = _lifecycle_days_between(
+            earlier=reminder_at_utc,
+            later=overdue_at_utc,
+            field_name="Overdue time",
+        )
+        if reminder_days >= interval_days:
+            raise ValueError("Reminder time must be before overdue time")
+
+        escalation_delay_days = _lifecycle_days_between(
+            earlier=overdue_at_utc,
+            later=escalation_at_utc,
+            field_name="Escalation time",
+        )
+        if escalation_delay_days < 1:
+            raise ValueError("Escalation time must be at least 1 lifecycle day after overdue time")
+
+    except ValueError as exc:
+        return RedirectResponse(
+            url=f"/ui/heartbeats?{urlencode({'error': str(exc)})}",
             status_code=303,
         )
 
@@ -502,17 +579,17 @@ def update_heartbeat_dashboard(
             heartbeat_id,
             owner_name=payload.owner_name,
             owner_email=str(payload.owner_email),
-            interval_days=payload.interval_days,
-            reminder_days=payload.reminder_days,
+            interval_days=interval_days,
+            reminder_days=reminder_days,
             escalation_enabled=payload.escalation_enabled,
-            escalation_delay_days=payload.escalation_delay_days,
+            escalation_delay_days=escalation_delay_days,
             escalation_contact_name=payload.escalation_contact_name,
             escalation_contact_email=(
                 str(payload.escalation_contact_email)
                 if payload.escalation_contact_email is not None
                 else None
             ),
-            arm_reminder_now=payload.arm_reminder_now,
+            now=current_time,
         )
     except ValueError as exc:
         return RedirectResponse(

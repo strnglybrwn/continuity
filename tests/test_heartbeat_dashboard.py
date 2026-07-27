@@ -229,7 +229,7 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
         escalation_delay_days,
         escalation_contact_name,
         escalation_contact_email,
-        arm_reminder_now,
+        now,
     ):
         called["heartbeat_id"] = _heartbeat_id
         called["owner_name"] = owner_name
@@ -240,7 +240,7 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
         called["escalation_delay_days"] = escalation_delay_days
         called["escalation_contact_name"] = escalation_contact_name
         called["escalation_contact_email"] = escalation_contact_email
-        called["arm_reminder_now"] = arm_reminder_now
+        called["now"] = now
         heartbeat = MagicMock()
         heartbeat.id = heartbeat_id
         return heartbeat
@@ -249,6 +249,24 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
         "app.api.heartbeat_dashboard.update_heartbeat_dashboard_settings",
         fake_update,
     )
+
+    baseline = Heartbeat(
+        id=heartbeat_id,
+        owner_name="Original",
+        owner_email="original@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        escalation_enabled=True,
+        escalation_delay_days=1,
+        escalation_contact_name="Ops",
+        escalation_contact_email="ops@example.com",
+        last_checkin_at=datetime(2026, 7, 1, 10, 0, tzinfo=UTC),
+        next_due_at=datetime(2026, 7, 31, 10, 0, tzinfo=UTC),
+        created_at=datetime(2026, 6, 1, 10, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 7, 1, 10, 0, tzinfo=UTC),
+    )
+    session.get.return_value = baseline
 
     app.dependency_overrides[get_db_session] = override_session(session)
 
@@ -259,13 +277,12 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
             data={
                 "owner_name": "New Owner",
                 "owner_email": "new@example.com",
-                "interval_days": "10",
-                "reminder_days": "5",
+                "reminder_at": "2026-07-12T11:00",
+                "overdue_at": "2026-07-15T11:00",
+                "escalation_at": "2026-07-18T11:00",
                 "escalation_enabled": "true",
-                "escalation_delay_days": "3",
                 "escalation_contact_name": "Ops Lead",
                 "escalation_contact_email": "ops@example.com",
-                "arm_reminder_now": "true",
             },
             files={},
             follow_redirects=False,
@@ -279,13 +296,13 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
         "heartbeat_id": heartbeat_id,
         "owner_name": "New Owner",
         "owner_email": "new@example.com",
-        "interval_days": 10,
-        "reminder_days": 5,
+        "interval_days": 14,
+        "reminder_days": 3,
         "escalation_enabled": True,
         "escalation_delay_days": 3,
         "escalation_contact_name": "Ops Lead",
         "escalation_contact_email": "ops@example.com",
-        "arm_reminder_now": True,
+        "now": called["now"],
     }
 
 
@@ -299,6 +316,23 @@ def test_heartbeat_dashboard_update_validation_error(monkeypatch) -> None:
     )
 
     app.dependency_overrides[get_db_session] = override_session(session)
+    heartbeat = Heartbeat(
+        id=heartbeat_id,
+        owner_name="Original",
+        owner_email="original@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        escalation_enabled=False,
+        escalation_delay_days=1,
+        escalation_contact_name=None,
+        escalation_contact_email=None,
+        last_checkin_at=datetime(2026, 7, 1, 10, 0, tzinfo=UTC),
+        next_due_at=datetime(2026, 7, 31, 10, 0, tzinfo=UTC),
+        created_at=datetime(2026, 6, 1, 10, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 7, 1, 10, 0, tzinfo=UTC),
+    )
+    session.get.return_value = heartbeat
 
     try:
         client = TestClient(app)
@@ -307,9 +341,9 @@ def test_heartbeat_dashboard_update_validation_error(monkeypatch) -> None:
             data={
                 "owner_name": "New Owner",
                 "owner_email": "not-an-email",
-                "interval_days": "10",
-                "reminder_days": "5",
-                "escalation_delay_days": "2",
+                "reminder_at": "2026-07-12T11:00",
+                "overdue_at": "2026-07-15T11:00",
+                "escalation_at": "2026-07-16T11:00",
             },
             files={},
             follow_redirects=False,
@@ -347,10 +381,7 @@ def test_heartbeat_dashboard_create_redirects_with_success(monkeypatch) -> None:
             data={
                 "owner_name": "New Owner",
                 "owner_email": "new@example.com",
-                "interval_days": "10",
-                "reminder_days": "5",
                 "escalation_enabled": "true",
-                "escalation_delay_days": "3",
                 "escalation_contact_name": "Ops Lead",
                 "escalation_contact_email": "ops@example.com",
             },
@@ -367,10 +398,10 @@ def test_heartbeat_dashboard_create_redirects_with_success(monkeypatch) -> None:
     request = called["request"]
     assert request.owner_name == "New Owner"
     assert str(request.owner_email) == "new@example.com"
-    assert request.interval_days == 10
-    assert request.reminder_days == 5
+    assert request.interval_days == 30
+    assert request.reminder_days == 7
     assert request.escalation_enabled is True
-    assert request.escalation_delay_days == 3
+    assert request.escalation_delay_days == 1
     assert request.escalation_contact_name == "Ops Lead"
     assert str(request.escalation_contact_email) == "ops@example.com"
 
@@ -393,9 +424,6 @@ def test_heartbeat_dashboard_create_validation_error(monkeypatch) -> None:
             data={
                 "owner_name": "New Owner",
                 "owner_email": "not-an-email",
-                "interval_days": "10",
-                "reminder_days": "5",
-                "escalation_delay_days": "2",
             },
             files={},
             follow_redirects=False,

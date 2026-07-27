@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -405,7 +405,6 @@ def update_heartbeat_dashboard_settings(
     escalation_delay_days: int | None = None,
     escalation_contact_name: str | None = None,
     escalation_contact_email: str | None = None,
-    arm_reminder_now: bool,
     now: datetime | None = None,
 ) -> Heartbeat | None:
     """Update dashboard-editable heartbeat fields used for reminder testing."""
@@ -443,11 +442,6 @@ def update_heartbeat_dashboard_settings(
         if not escalation_contact_email:
             raise ValueError("escalation_contact_email is required when escalation_enabled is true")
 
-    if arm_reminder_now and reminder_days == 0:
-        raise ValueError(
-            "Set reminder_days to at least 1 before arming reminder due now",
-        )
-
     current_time = now if now is not None else utc_now()
 
     heartbeat.owner_name = owner_name
@@ -468,15 +462,8 @@ def update_heartbeat_dashboard_settings(
         heartbeat.escalation_contact_name = None
         heartbeat.escalation_contact_email = None
 
-    if arm_reminder_now:
-        heartbeat.status = HeartbeatStatus.ACTIVE
-        # Put due time in the near future so reminder window is active now.
-        heartbeat.next_due_at = current_time + timedelta(hours=1)
-    else:
-        base_time = (
-            heartbeat.last_checkin_at if heartbeat.last_checkin_at is not None else current_time
-        )
-        heartbeat.next_due_at = base_time + lifecycle_duration(interval_days)
+    base_time = heartbeat.last_checkin_at if heartbeat.last_checkin_at is not None else current_time
+    heartbeat.next_due_at = base_time + lifecycle_duration(interval_days)
 
     session.commit()
     session.refresh(heartbeat)

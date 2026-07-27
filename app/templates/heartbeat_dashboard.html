@@ -519,7 +519,7 @@
             <header class="card-top">
                 <div>
                     <div class="card-owner">Add New Heartbeat</div>
-                    <div class="meta">Create a heartbeat and configure its reminder and escalation policy.</div>
+                    <div class="meta">Create a heartbeat with default lifecycle timing: reminder in 30 days, overdue warning 7 days later, escalation 1 day after that.</div>
                 </div>
             </header>
             <div class="card-grid" style="grid-template-columns: 1fr;">
@@ -535,16 +535,12 @@
                                 <input id="new_owner_email" type="email" name="owner_email" required>
                             </div>
                             <div class="edit-field">
-                                <label for="new_interval_days">Interval (days)</label>
-                                <input id="new_interval_days" type="number" name="interval_days" min="1" max="365" value="30" required>
+                                <label>Default reminder schedule</label>
+                                <input type="text" value="30 days after creation" disabled>
                             </div>
                             <div class="edit-field">
-                                <label for="new_reminder_days">Reminder lead (days)</label>
-                                <input id="new_reminder_days" type="number" name="reminder_days" min="0" max="364" value="7" required>
-                            </div>
-                            <div class="edit-field">
-                                <label for="new_escalation_delay_days">Escalation delay (days)</label>
-                                <input id="new_escalation_delay_days" type="number" name="escalation_delay_days" min="1" max="365" value="1" required>
+                                <label>Default overdue schedule</label>
+                                <input type="text" value="7 days after reminder" disabled>
                             </div>
                             <div class="edit-field">
                                 <label for="new_escalation_contact_name">Escalation contact name</label>
@@ -553,6 +549,10 @@
                             <div class="edit-field row-span-2">
                                 <label for="new_escalation_contact_email">Escalation contact email</label>
                                 <input id="new_escalation_contact_email" type="email" name="escalation_contact_email">
+                            </div>
+                            <div class="edit-field row-span-2">
+                                <label>Default escalation schedule</label>
+                                <input type="text" value="1 day after overdue warning" disabled>
                             </div>
                             <div class="edit-field row-span-2">
                                 <label for="new_attachments">Escalation attachments (PDF, Office docs, images; max 5 files, 250 MB each)</label>
@@ -667,16 +667,16 @@
                                     <input id="owner_email_{{ row.id }}" type="email" name="owner_email" value="{{ row.owner_email }}" required>
                                 </div>
                                 <div class="edit-field">
-                                    <label for="interval_days_{{ row.id }}">Interval (days)</label>
-                                    <input id="interval_days_{{ row.id }}" type="number" name="interval_days" min="1" max="365" value="{{ row.interval_days }}" required>
+                                    <label for="reminder_at_{{ row.id }}">Reminder time</label>
+                                    <input id="reminder_at_{{ row.id }}" type="datetime-local" name="reminder_at" value="{{ row.reminder_at_input }}" required>
                                 </div>
                                 <div class="edit-field">
-                                    <label for="reminder_days_{{ row.id }}">Reminder lead (days)</label>
-                                    <input id="reminder_days_{{ row.id }}" type="number" name="reminder_days" min="0" max="364" value="{{ row.reminder_days }}" required>
+                                    <label for="overdue_at_{{ row.id }}">Overdue warning time</label>
+                                    <input id="overdue_at_{{ row.id }}" type="datetime-local" name="overdue_at" value="{{ row.next_due_at_input }}" required>
                                 </div>
                                 <div class="edit-field">
-                                    <label for="escalation_delay_days_{{ row.id }}">Escalation delay (days)</label>
-                                    <input id="escalation_delay_days_{{ row.id }}" type="number" name="escalation_delay_days" min="1" max="365" value="{{ row.escalation_delay_days }}" required>
+                                    <label for="escalation_at_{{ row.id }}">Escalation time</label>
+                                    <input id="escalation_at_{{ row.id }}" type="datetime-local" name="escalation_at" value="{{ row.escalation_at_input }}" required>
                                 </div>
                                 <div class="edit-field">
                                     <label for="escalation_contact_name_{{ row.id }}">Escalation contact name</label>
@@ -696,10 +696,6 @@
                                 <label class="toggle">
                                     <input type="checkbox" name="escalation_enabled" value="true" {% if row.escalation_enabled %}checked{% endif %}>
                                     Enable escalation sequence
-                                </label>
-                                <label class="toggle">
-                                    <input type="checkbox" name="arm_reminder_now" value="true">
-                                    Arm reminder due now
                                 </label>
                             </div>
 

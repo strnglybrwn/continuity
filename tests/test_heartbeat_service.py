@@ -191,7 +191,6 @@ def test_update_heartbeat_dashboard_settings_recalculates_due_at() -> None:
         owner_email="zoe@example.com",
         interval_days=14,
         reminder_days=3,
-        arm_reminder_now=False,
         now=now,
     )
 
@@ -205,17 +204,17 @@ def test_update_heartbeat_dashboard_settings_recalculates_due_at() -> None:
     session.refresh.assert_called_once_with(heartbeat)
 
 
-def test_update_heartbeat_dashboard_settings_arms_reminder_now() -> None:
+def test_update_heartbeat_dashboard_settings_uses_now_when_no_last_checkin() -> None:
     now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
     heartbeat = Heartbeat(
         id=uuid4(),
         owner_name="Scott",
         owner_email="scott@example.com",
-        status=HeartbeatStatus.OVERDUE,
+        status=HeartbeatStatus.ACTIVE,
         interval_days=30,
         reminder_days=7,
-        last_checkin_at=datetime(2026, 7, 1, 10, 0, tzinfo=UTC),
-        next_due_at=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
+        last_checkin_at=None,
+        next_due_at=datetime(2026, 7, 30, 10, 0, tzinfo=UTC),
     )
 
     session = MagicMock()
@@ -226,15 +225,13 @@ def test_update_heartbeat_dashboard_settings_arms_reminder_now() -> None:
         heartbeat.id,
         owner_name="Scott",
         owner_email="scott@example.com",
-        interval_days=30,
+        interval_days=10,
         reminder_days=7,
-        arm_reminder_now=True,
         now=now,
     )
 
     assert result is heartbeat
-    assert heartbeat.status == HeartbeatStatus.ACTIVE
-    assert heartbeat.next_due_at == datetime(2026, 7, 22, 13, 0, tzinfo=UTC)
+    assert heartbeat.next_due_at == datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
 
 
 def test_update_heartbeat_dashboard_settings_rejects_invalid_reminder_window() -> None:
@@ -259,7 +256,6 @@ def test_update_heartbeat_dashboard_settings_rejects_invalid_reminder_window() -
             owner_email="scott@example.com",
             interval_days=5,
             reminder_days=7,
-            arm_reminder_now=False,
         )
 
 
