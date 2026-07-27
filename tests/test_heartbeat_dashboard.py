@@ -229,6 +229,9 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
         escalation_delay_days,
         escalation_contact_name,
         escalation_contact_email,
+        next_due_at_override,
+        reminder_at_override,
+        escalation_at_override,
         now,
     ):
         called["heartbeat_id"] = _heartbeat_id
@@ -240,6 +243,9 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
         called["escalation_delay_days"] = escalation_delay_days
         called["escalation_contact_name"] = escalation_contact_name
         called["escalation_contact_email"] = escalation_contact_email
+        called["next_due_at_override"] = next_due_at_override
+        called["reminder_at_override"] = reminder_at_override
+        called["escalation_at_override"] = escalation_at_override
         called["now"] = now
         heartbeat = MagicMock()
         heartbeat.id = heartbeat_id
@@ -302,6 +308,9 @@ def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
         "escalation_delay_days": 3,
         "escalation_contact_name": "Ops Lead",
         "escalation_contact_email": "ops@example.com",
+        "next_due_at_override": datetime(2026, 7, 15, 10, 0, tzinfo=UTC),
+        "reminder_at_override": datetime(2026, 7, 12, 10, 0, tzinfo=UTC),
+        "escalation_at_override": datetime(2026, 7, 18, 10, 0, tzinfo=UTC),
         "now": called["now"],
     }
 

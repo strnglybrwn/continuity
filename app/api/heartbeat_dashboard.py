@@ -1,3 +1,4 @@
+import math
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
@@ -93,21 +94,6 @@ def _parse_dashboard_datetime_input(*, raw_value: str, field_name: str) -> datet
 
     localized = parsed.replace(tzinfo=DASHBOARD_TIMEZONE)
     return localized.astimezone(UTC)
-
-
-def _lifecycle_days_between(*, earlier: datetime, later: datetime, field_name: str) -> int:
-    delta_seconds = int((later - earlier).total_seconds())
-
-    if delta_seconds < 0:
-        raise ValueError(f"{field_name} must be after the previous lifecycle stage")
-
-    day_seconds = settings.effective_lifecycle_day_seconds
-    if delta_seconds % day_seconds != 0:
-        raise ValueError(
-            f"{field_name} must align to whole lifecycle days of {day_seconds} seconds"
-        )
-
-    return delta_seconds // day_seconds
 
 
 def _risk_label(
@@ -335,9 +321,9 @@ def list_heartbeats_dashboard(
                     escalation_timeline_at,
                 ),
                 "reminder_at": reminder_at,
-                "reminder_at_input": _format_dashboard_datetime_input(reminder_timeline_at),
-                "next_due_at_input": _format_dashboard_datetime_input(overdue_timeline_at),
-                "escalation_at_input": _format_dashboard_datetime_input(escalation_timeline_at),
+                "reminder_at_input": _format_dashboard_datetime_input(reminder_at),
+                "next_due_at_input": _format_dashboard_datetime_input(heartbeat.next_due_at),
+                "escalation_at_input": _format_dashboard_datetime_input(escalation_at),
                 "is_reminder_due": reminder_due,
                 "is_escalation_due": escalation_due,
                 "risk_label": _risk_label(
@@ -536,6 +522,12 @@ def update_heartbeat_dashboard(
             field_name="Escalation time",
         )
 
+        if reminder_at_utc > overdue_at_utc:
+            raise ValueError("Reminder time must be on or before overdue time")
+
+        if escalation_at_utc < overdue_at_utc:
+            raise ValueError("Escalation time must be on or after overdue time")
+
         current_time = utc_now()
         base_time = (
             heartbeat.last_checkin_at
@@ -543,29 +535,27 @@ def update_heartbeat_dashboard(
             else heartbeat.created_at
         )
 
-        interval_days = _lifecycle_days_between(
-            earlier=base_time,
-            later=overdue_at_utc,
-            field_name="Overdue time",
-        )
-        if interval_days < 1:
-            raise ValueError("Overdue time must be at least 1 lifecycle day after baseline")
+        if overdue_at_utc <= base_time:
+            raise ValueError("Overdue time must be after the heartbeat baseline time")
 
-        reminder_days = _lifecycle_days_between(
-            earlier=reminder_at_utc,
-            later=overdue_at_utc,
-            field_name="Overdue time",
+        day_seconds = settings.effective_lifecycle_day_seconds
+        interval_days = max(
+            1,
+            math.ceil((overdue_at_utc - base_time).total_seconds() / day_seconds),
         )
-        if reminder_days >= interval_days:
-            raise ValueError("Reminder time must be before overdue time")
 
-        escalation_delay_days = _lifecycle_days_between(
-            earlier=overdue_at_utc,
-            later=escalation_at_utc,
-            field_name="Escalation time",
+        reminder_days = max(
+            0,
+            min(
+                interval_days - 1,
+                math.ceil((overdue_at_utc - reminder_at_utc).total_seconds() / day_seconds),
+            ),
         )
-        if escalation_delay_days < 1:
-            raise ValueError("Escalation time must be at least 1 lifecycle day after overdue time")
+
+        escalation_delay_days = max(
+            1,
+            math.ceil((escalation_at_utc - overdue_at_utc).total_seconds() / day_seconds),
+        )
 
     except ValueError as exc:
         return RedirectResponse(
@@ -589,6 +579,9 @@ def update_heartbeat_dashboard(
                 if payload.escalation_contact_email is not None
                 else None
             ),
+            next_due_at_override=overdue_at_utc,
+            reminder_at_override=reminder_at_utc,
+            escalation_at_override=escalation_at_utc,
             now=current_time,
         )
     except ValueError as exc:

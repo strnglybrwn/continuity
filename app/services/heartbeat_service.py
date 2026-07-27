@@ -57,6 +57,9 @@ def record_heartbeat_event(
 
 def heartbeat_reminder_at(heartbeat: Heartbeat) -> datetime:
     """Return the start of a heartbeat's reminder window."""
+    if heartbeat.reminder_at_override is not None:
+        return heartbeat.reminder_at_override
+
     return heartbeat.next_due_at - lifecycle_duration(
         heartbeat.reminder_days,
     )
@@ -64,7 +67,12 @@ def heartbeat_reminder_at(heartbeat: Heartbeat) -> datetime:
 
 def heartbeat_escalation_at(heartbeat: Heartbeat) -> datetime:
     """Return when escalation should trigger for an overdue heartbeat."""
-    escalation_delay_days = heartbeat.escalation_delay_days or 1
+    if heartbeat.escalation_at_override is not None:
+        return heartbeat.escalation_at_override
+
+    escalation_delay_days = (
+        heartbeat.escalation_delay_days if heartbeat.escalation_delay_days is not None else 1
+    )
 
     return heartbeat.next_due_at + lifecycle_duration(
         escalation_delay_days,
@@ -349,6 +357,8 @@ def _apply_heartbeat_checkin(
 
     heartbeat.status = HeartbeatStatus.ACTIVE
     heartbeat.last_checkin_at = created_at
+    heartbeat.reminder_at_override = None
+    heartbeat.escalation_at_override = None
     heartbeat.next_due_at = created_at + lifecycle_duration(
         heartbeat.interval_days,
     )
@@ -405,6 +415,9 @@ def update_heartbeat_dashboard_settings(
     escalation_delay_days: int | None = None,
     escalation_contact_name: str | None = None,
     escalation_contact_email: str | None = None,
+    next_due_at_override: datetime | None = None,
+    reminder_at_override: datetime | None = None,
+    escalation_at_override: datetime | None = None,
     now: datetime | None = None,
 ) -> Heartbeat | None:
     """Update dashboard-editable heartbeat fields used for reminder testing."""
@@ -463,7 +476,23 @@ def update_heartbeat_dashboard_settings(
         heartbeat.escalation_contact_email = None
 
     base_time = heartbeat.last_checkin_at if heartbeat.last_checkin_at is not None else current_time
-    heartbeat.next_due_at = base_time + lifecycle_duration(interval_days)
+    heartbeat.next_due_at = (
+        next_due_at_override
+        if next_due_at_override is not None
+        else base_time + lifecycle_duration(interval_days)
+    )
+
+    if reminder_at_override is not None and reminder_at_override > heartbeat.next_due_at:
+        raise ValueError("Reminder time must be on or before overdue time")
+
+    if escalation_at_override is not None and escalation_at_override < heartbeat.next_due_at:
+        raise ValueError("Escalation time must be on or after overdue time")
+
+    heartbeat.reminder_at_override = reminder_at_override
+    heartbeat.escalation_at_override = escalation_at_override
+
+    if escalation_enabled is not None and not escalation_enabled:
+        heartbeat.escalation_at_override = None
 
     session.commit()
     session.refresh(heartbeat)
