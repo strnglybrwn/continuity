@@ -51,10 +51,10 @@ def test_heartbeat_dashboard_lists_recipient_email(monkeypatch) -> None:
     assert response.status_code == 200
     assert "Heartbeat Verifier" in response.text
     assert "scott@example.com" in response.text
-    assert "Lifecycle Summary" in response.text
-    assert "Timeline" in response.text
-    assert "Next Actions" in response.text
-    assert "Configurable Policy" in response.text
+    assert "Lifecycle Flow" in response.text
+    assert "Policy Editor" in response.text
+    assert "Core identity" in response.text
+    assert "Heartbeat Settings" in response.text
     assert "01/08/2026 11:00 BST" in response.text
     assert "Total heartbeats: 1" in response.text
 
@@ -531,8 +531,8 @@ def test_heartbeat_dashboard_page_includes_create_form_and_delete_button(monkeyp
     assert 'action="/ui/heartbeats"' in response.text
     assert f'action="/ui/heartbeats/{heartbeat.id}/delete"' in response.text
     assert "Delete Heartbeat" in response.text
-    assert "Send overdue warning to owner" in response.text
-    assert "Send escalation notice to contact" in response.text
+    assert "Overdue warning to owner" in response.text
+    assert "Escalation notice to contact" in response.text
     assert "Escalation attachments" in response.text
 
 
