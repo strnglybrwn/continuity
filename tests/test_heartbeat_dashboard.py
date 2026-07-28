@@ -49,6 +49,7 @@ def test_heartbeat_dashboard_lists_recipient_email(monkeypatch) -> None:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store, max-age=0"
     assert "Heartbeat Verifier" in response.text
     assert "scott@example.com" in response.text
     assert "Lifecycle Flow" in response.text

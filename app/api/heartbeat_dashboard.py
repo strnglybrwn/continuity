@@ -353,7 +353,7 @@ def list_heartbeats_dashboard(
             }
         )
 
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request=request,
         name="heartbeat_dashboard.html",
         context={
@@ -365,6 +365,11 @@ def list_heartbeats_dashboard(
             "error": request.query_params.get("error"),
         },
     )
+
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+
+    return response
 
 
 @router.post(
