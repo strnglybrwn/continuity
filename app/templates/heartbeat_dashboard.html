@@ -113,6 +113,33 @@
             flex-wrap: wrap;
         }
 
+        .create-card > summary.card-top {
+            cursor: pointer;
+            list-style: none;
+        }
+
+        .create-card > summary.card-top::-webkit-details-marker {
+            display: none;
+        }
+
+        .create-card .card-top-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .create-card .card-top-title::after {
+            content: "▾";
+            color: var(--muted);
+            font-size: 1rem;
+            line-height: 1;
+            transition: transform 0.18s ease;
+        }
+
+        .create-card[open] .card-top-title::after {
+            transform: rotate(180deg);
+        }
+
         .card-owner {
             font-size: 1.06rem;
             font-weight: 800;
@@ -617,12 +644,12 @@
         </section>
         {% endif %}
 
-        <section class="heartbeat-card create-card">
-            <header class="card-top">
-                <div>
+        <details class="heartbeat-card create-card">
+            <summary class="card-top">
+                <div class="card-top-title">
                     <div class="card-owner">Add New Heartbeat</div>
                 </div>
-            </header>
+            </summary>
             <div class="card-grid" style="grid-template-columns: 1fr;">
                 <section class="panel">
                     <form class="edit-form" method="post" action="/ui/heartbeats" enctype="multipart/form-data">
@@ -698,7 +725,7 @@
                     </form>
                 </section>
             </div>
-        </section>
+        </details>
 
         {% if rows %}
         <section class="cards">
