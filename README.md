@@ -188,4 +188,4 @@ Commonly used settings:
 
 ## License
 
-No license file is currently published in this repository.
+This project is currently published under MIT license.
