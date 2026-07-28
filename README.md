@@ -101,7 +101,7 @@ GitHub Actions workflow: .github/workflows/ci.yml
 
 Runs only after Test succeeds.
 
-1. Build multi-platform image
+1. Build multi-platform image - my homelab is made up of a range of silicon
 - linux/amd64
 - linux/arm64
 2. Push image to GHCR with tags:
