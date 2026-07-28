@@ -62,7 +62,7 @@
           "parameters": [
             {
               "name": "limit",
-              "value": "={{$env.CONTINUITY_PENDING_LIMIT || 100}}"
+              "value": "100"
             }
           ]
         },
@@ -215,6 +215,107 @@
       }
     },
     {
+      "id": "6d",
+      "name": "Code - Expand Escalation Attachments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        460
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const expanded = [];\n\nfor (const item of $input.all()) {\n  const payload = item.json || {};\n  const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];\n\n  if (attachments.length === 0) {\n    expanded.push({\n      json: {\n        ...payload,\n        __has_attachment: 'false'\n      }\n    });\n    continue;\n  }\n\n  for (const attachment of attachments) {\n    expanded.push({\n      json: {\n        ...payload,\n        __has_attachment: 'true',\n        attachment\n      }\n    });\n  }\n}\n\nreturn expanded;"
+      }
+    },
+    {
+      "id": "6e",
+      "name": "Switch - Escalation Attachment Path",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2000,
+        460
+      ],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.__has_attachment}}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "download"
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.__has_attachment}}",
+                    "rightValue": "false",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "direct"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "6f",
+      "name": "HTTP - Download Escalation Attachment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2260,
+        380
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "method": "GET",
+        "url": "https://continuity.boardmad.com{{ $json.attachment.content_url_path }}",
+        "responseFormat": "file",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "6g",
+      "name": "Code - Assemble Escalation Email Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2520,
+        460
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const groups = new Map();\n\nfor (const item of $input.all()) {\n  const payload = item.json || {};\n  const eventId = payload.event_id;\n\n  if (!eventId) {\n    continue;\n  }\n\n  if (!groups.has(eventId)) {\n    const base = { ...payload };\n    delete base.__has_attachment;\n    delete base.attachment;\n\n    groups.set(eventId, {\n      json: base,\n      binary: {}\n    });\n  }\n\n  const group = groups.get(eventId);\n  const downloaded = item.binary?.data;\n\n  if (downloaded) {\n    const attachmentCount = Object.keys(group.binary).length + 1;\n    const key = `attachment_${attachmentCount}`;\n    const meta = payload.attachment || {};\n\n    group.binary[key] = {\n      ...downloaded,\n      fileName: meta.filename || downloaded.fileName || key,\n      mimeType: meta.content_type || downloaded.mimeType || 'application/octet-stream'\n    };\n  }\n}\n\nreturn Array.from(groups.values()).map((entry) => {\n  if (Object.keys(entry.binary).length === 0) {\n    return { json: entry.json };\n  }\n\n  return entry;\n});"
+      }
+    },
+    {
       "id": "7a",
       "name": "Email - Send Reminder",
       "type": "n8n-nodes-base.emailSend",
@@ -258,7 +359,7 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        1780,
+        2780,
         460
       ],
       "parameters": {
@@ -266,7 +367,8 @@
         "toEmail": "={{$json.escalation_contact_email}}",
         "subject": "={{$json.subject}}",
         "text": "={{$json.text_body}}",
-        "html": "={{$json.html_body}}"
+        "html": "={{$json.html_body}}",
+        "attachments": "={{Object.keys($binary || {}).join(',')}}"
       },
       "notesInFlow": true,
       "notes": "Attach your SMTP credentials to this node after import. Informational only \u2014 no check-in link is sent to the escalation contact."
@@ -285,7 +387,7 @@
       "waitBetweenTries": 2000,
       "parameters": {
         "method": "POST",
-        "url": "https://continuity.boardmad.com/heartbeat-events/{{ $('Code - Expand Event Array').item.json.id }}/delivered",
+        "url": "https://continuity.boardmad.com/heartbeat-events/{{ $json.event_id }}/delivered",
         "options": {
           "timeout": 30000
         }
@@ -399,6 +501,57 @@
       ]
     },
     "HTTP - Prepare Escalation Payload": {
+      "main": [
+        [
+          {
+            "node": "Code - Expand Escalation Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Expand Escalation Attachments": {
+      "main": [
+        [
+          {
+            "node": "Switch - Escalation Attachment Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Escalation Attachment Path": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Download Escalation Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code - Assemble Escalation Email Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Download Escalation Attachment": {
+      "main": [
+        [
+          {
+            "node": "Code - Assemble Escalation Email Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Assemble Escalation Email Payload": {
       "main": [
         [
           {

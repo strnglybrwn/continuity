@@ -256,6 +256,37 @@ Note: no checkin_url field — the escalation-contact email is informational onl
 ### Node 6d
 
 1. Name
+- Code - Expand Escalation Attachments
+
+2. Type
+- Code
+
+3. Key config
+- Mode: Run Once for All Items
+- Expands each escalation payload into one item per attachment
+- Emits a direct-send item when no attachments exist
+
+4. Purpose
+- Normalize escalation payloads so attachment and no-attachment flows can be routed cleanly.
+
+### Node 6e
+
+1. Name
+- Switch - Escalation Attachment Path
+
+2. Type
+- Switch
+
+3. Key config
+- Route `__has_attachment=true` to download path
+- Route `__has_attachment=false` to direct-send path
+
+4. Purpose
+- Ensure attachment downloads only run when attachments are present.
+
+### Node 6f
+
+1. Name
 - HTTP - Download Escalation Attachment
 
 2. Type
@@ -263,7 +294,7 @@ Note: no checkin_url field — the escalation-contact email is informational onl
 
 3. Key config
 - Method: GET
-- URL: {{$env.CONTINUITY_API_BASE_URL}}{{$json.content_url_path}}
+- URL: {{$env.CONTINUITY_API_BASE_URL}}{{$json.attachment.content_url_path}}
 - Response Format: File
 - Timeout: 30000
 - Retry On Fail: true
@@ -271,7 +302,23 @@ Note: no checkin_url field — the escalation-contact email is informational onl
 - Wait Between Tries: 2000
 
 4. Purpose
-- Download each escalation attachment and pass as binary data to the escalation email node.
+- Download each escalation attachment as binary for email delivery.
+
+### Node 6g
+
+1. Name
+- Code - Assemble Escalation Email Payload
+
+2. Type
+- Code
+
+3. Key config
+- Mode: Run Once for All Items
+- Groups items by event_id
+- Aggregates downloaded binaries to attachment_1, attachment_2, ...
+
+4. Purpose
+- Build one email item per escalation event with all attachments included.
 
 ### Node 7a
 
@@ -328,7 +375,7 @@ Note: no checkin_url field — the escalation-contact email is informational onl
 - Subject: {{$json.subject}}
 - Text: {{$json.text_body}}
 - HTML: {{$json.html_body}}
-- Attachments: include binaries produced by "HTTP - Download Escalation Attachment"
+- Attachments: `{{Object.keys($binary || {}).join(',')}}`
 - Continue On Fail: false
 
 4. Operational rule
@@ -395,12 +442,17 @@ return [
 7. Switch - Route By Event Type (escalation_due) -> HTTP - Prepare Escalation Payload
 8. HTTP - Prepare Reminder Payload -> Email - Send Reminder
 9. HTTP - Prepare Overdue-Warning Payload -> Email - Send Overdue Warning
-10. HTTP - Prepare Escalation Payload -> Email - Send Escalation Notice
-11. Email - Send Reminder -> HTTP - Mark Event Delivered
-12. Email - Send Overdue Warning -> HTTP - Mark Event Delivered
-13. Email - Send Escalation Notice -> HTTP - Mark Event Delivered
-14. HTTP - Mark Event Delivered -> Code - Execution Summary
-15. Switch - Route By Event Type (no match) -> no connection
+10. HTTP - Prepare Escalation Payload -> Code - Expand Escalation Attachments
+11. Code - Expand Escalation Attachments -> Switch - Escalation Attachment Path
+12. Switch - Escalation Attachment Path (download) -> HTTP - Download Escalation Attachment
+13. HTTP - Download Escalation Attachment -> Code - Assemble Escalation Email Payload
+14. Switch - Escalation Attachment Path (direct) -> Code - Assemble Escalation Email Payload
+15. Code - Assemble Escalation Email Payload -> Email - Send Escalation Notice
+16. Email - Send Reminder -> HTTP - Mark Event Delivered
+17. Email - Send Overdue Warning -> HTTP - Mark Event Delivered
+18. Email - Send Escalation Notice -> HTTP - Mark Event Delivered
+19. HTTP - Mark Event Delivered -> Code - Execution Summary
+20. Switch - Route By Event Type (no match) -> no connection
 
 All three email-send nodes converge on the same HTTP - Mark Event Delivered node, since every prepare-* response includes event_id.
 
@@ -423,6 +475,7 @@ After activation, confirm the following with one event of each type:
 4. Event no longer appears in GET /heartbeat-events/pending.
 5. Reminder and overdue-warning check-in links open the confirmation page.
 6. Escalation email contains no check-in link (informational only, by design).
+7. Escalation email includes all configured heartbeat attachments when attachments are present.
 
 ## Optional Second Workflow (Failure Alerts)
 

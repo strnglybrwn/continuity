@@ -1,7 +1,17 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -229,6 +239,14 @@ class HeartbeatCheckInToken(Base):
 
 class HeartbeatEvent(Base):
     __tablename__ = "heartbeat_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "heartbeat_id",
+            "event_type",
+            "occurred_at",
+            name="uq_heartbeat_events_heartbeat_event_occurred",
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(
         PostgreSQLUUID(as_uuid=True),

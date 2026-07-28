@@ -18,6 +18,12 @@ from app.persistence.models import (
     HeartbeatEvent,
 )
 
+_LIFECYCLE_QUEUE_EVENT_TYPES = (
+    HeartbeatEventType.REMINDER_DUE,
+    HeartbeatEventType.OVERDUE,
+    HeartbeatEventType.ESCALATION_DUE,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class HeartbeatEvaluationResult:
@@ -457,6 +463,16 @@ def update_heartbeat_dashboard_settings(
 
     current_time = now if now is not None else utc_now()
 
+    previous_schedule_state = (
+        heartbeat.interval_days,
+        heartbeat.reminder_days,
+        heartbeat.next_due_at,
+        heartbeat.reminder_at_override,
+        heartbeat.escalation_at_override,
+        heartbeat.escalation_enabled,
+        heartbeat.escalation_delay_days,
+    )
+
     heartbeat.owner_name = owner_name
     heartbeat.owner_email = owner_email
     heartbeat.interval_days = interval_days
@@ -493,6 +509,24 @@ def update_heartbeat_dashboard_settings(
 
     if escalation_enabled is not None and not escalation_enabled:
         heartbeat.escalation_at_override = None
+
+    updated_schedule_state = (
+        heartbeat.interval_days,
+        heartbeat.reminder_days,
+        heartbeat.next_due_at,
+        heartbeat.reminder_at_override,
+        heartbeat.escalation_at_override,
+        heartbeat.escalation_enabled,
+        heartbeat.escalation_delay_days,
+    )
+
+    if updated_schedule_state != previous_schedule_state:
+        # Invalidate stale pending queue events after a policy timing change.
+        session.query(HeartbeatEvent).filter(
+            HeartbeatEvent.heartbeat_id == heartbeat.id,
+            HeartbeatEvent.delivered_at.is_(None),
+            HeartbeatEvent.event_type.in_(_LIFECYCLE_QUEUE_EVENT_TYPES),
+        ).delete(synchronize_session=False)
 
     session.commit()
     session.refresh(heartbeat)
