@@ -317,6 +317,17 @@ Note: no checkin_url field — the escalation-contact email is informational onl
 - Groups items by event_id
 - Aggregates downloaded binaries to attachment_1, attachment_2, ...
 
+5. Important implementation note
+- Do not hardcode a source binary key such as `data` when collecting files from
+  HTTP - Download Escalation Attachment.
+- Depending on n8n/node-version behavior, the HTTP node may emit a different
+  source key for the downloaded file.
+- The workflow import uses `Object.entries(item.binary || {})` and normalizes
+  each file to deterministic `attachment_N` keys before Email - Send
+  Escalation Notice.
+- Symptom of a broken implementation: escalation email sends successfully but
+  arrives without attachments.
+
 4. Purpose
 - Build one email item per escalation event with all attachments included.
 

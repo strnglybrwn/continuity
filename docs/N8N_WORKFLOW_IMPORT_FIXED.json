@@ -1,0 +1,726 @@
+{
+  "name": "Continuity MVP - Reminder Dispatch",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "id": "25a02a40-9dda-40de-8558-4d2ebb334815",
+      "name": "Trigger - Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1600,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://continuity.boardmad.com/heartbeat-events/evaluate-due",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "ed6ee29d-8a32-43c6-ad93-8fa024e9833c",
+      "name": "HTTP - Evaluate Due Heartbeats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1376,
+        -16
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "url": "https://continuity.boardmad.com/heartbeat-events/pending",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "=100"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "1ace79bf-060f-49b4-9f66-603172f65624",
+      "name": "HTTP - List Pending Events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1152,
+        -16
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst expanded = [];\n\nfor (const item of items) {\n  if (Array.isArray(item.json)) {\n    for (const event of item.json) {\n      expanded.push({ json: event });\n    }\n  } else {\n    expanded.push({ json: item.json });\n  }\n}\n\nreturn expanded;"
+      },
+      "id": "602499f4-d9e8-49b8-87c8-d1e707737b9f",
+      "name": "Code - Expand Event Array",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -928,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.event_type}}",
+                    "rightValue": "reminder_due",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "e0fb16b4-c158-4359-b58c-3e0bf191c84b"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reminder_due"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.event_type}}",
+                    "rightValue": "overdue",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "6d8c4b39-c12c-425e-adb0-85756cd94893"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "overdue"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.event_type}}",
+                    "rightValue": "escalation_due",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "a3552ec4-2aef-45c8-b5aa-aa719ee580ff"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "escalation_due"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ab505d69-51a2-4f40-bd14-0826e963d21c",
+      "name": "Switch - Route By Event Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -704,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://continuity.boardmad.com/heartbeat-events/{{ $json.id }}/prepare-reminder",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "dd18a455-92a9-40ef-892f-e2c69d03aae4",
+      "name": "HTTP - Prepare Reminder Payload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        -240
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://continuity.boardmad.com/heartbeat-events/{{ $json.id }}/prepare-overdue",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "08f2a5fd-713c-40c6-9594-6f09b8b7b9aa",
+      "name": "HTTP - Prepare Overdue-Warning Payload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        -16
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://continuity.boardmad.com/heartbeat-events/{{ $json.id }}/prepare-escalation",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "f5fec0cd-e62e-4620-8ace-c0ee1199673b",
+      "name": "HTTP - Prepare Escalation Payload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -480,
+        224
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const expanded = [];\n\nfor (const item of $input.all()) {\n  const payload = item.json || {};\n  const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];\n\n  if (attachments.length === 0) {\n    expanded.push({\n      json: {\n        ...payload,\n        __has_attachment: 'false'\n      }\n    });\n    continue;\n  }\n\n  for (const attachment of attachments) {\n    expanded.push({\n      json: {\n        ...payload,\n        __has_attachment: 'true',\n        attachment\n      }\n    });\n  }\n}\n\nreturn expanded;"
+      },
+      "id": "c1d86b9d-e013-41e6-bf40-4df1dc831bfe",
+      "name": "Code - Expand Escalation Attachments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.__has_attachment}}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "939ae49d-1698-4bb1-8142-ea2d4535d180"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "download"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.__has_attachment}}",
+                    "rightValue": "false",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "b9b06dd3-4bcb-4f95-92a3-dfb297facb04"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "direct"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d2ab935f-4644-4b32-875a-2e36f44d979d",
+      "name": "Switch - Escalation Attachment Path",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -32,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://continuity.boardmad.com{{ $json.attachment.content_url_path }}",
+        "responseFormat": "file",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "83daa765-f852-43b4-a3d6-f9b6a6159bff",
+      "name": "HTTP - Download Escalation Attachment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        160
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "const groups = new Map();\n\nfor (const item of $input.all()) {\n  const payload = item.json || {};\n  const eventId = payload.event_id;\n\n  if (!eventId) {\n    continue;\n  }\n\n  if (!groups.has(eventId)) {\n    const base = { ...payload };\n    delete base.__has_attachment;\n    delete base.attachment;\n\n    groups.set(eventId, {\n      json: base,\n      binary: {}\n    });\n  }\n\n  const group = groups.get(eventId);\n  const meta = payload.attachment || {};\n  const binaryEntries = Object.entries(item.binary || {});\n\n  for (const [sourceKey, downloaded] of binaryEntries) {\n    const attachmentCount = Object.keys(group.binary).length + 1;\n    const key = `attachment_${attachmentCount}`;\n\n    group.binary[key] = {\n      ...downloaded,\n      fileName: meta.filename || downloaded.fileName || sourceKey || key,\n      mimeType: meta.content_type || downloaded.mimeType || 'application/octet-stream'\n    };\n  }\n}\n\nreturn Array.from(groups.values()).map((entry) => {\n  if (Object.keys(entry.binary).length === 0) {\n    return { json: entry.json };\n  }\n\n  return entry;\n});"
+      },
+      "id": "34c39bc6-dca3-484b-a2f3-4ffc263a66e8",
+      "name": "Code - Assemble Escalation Email Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "scottbrown@boardmad.com",
+        "toEmail": "={{$json.owner_email}}",
+        "subject": "={{$json.subject}}",
+        "html": "={{$json.html_body}}",
+        "options": {}
+      },
+      "id": "8f8ea435-8f56-4a67-a2ba-82d232383bd5",
+      "name": "Email - Send Reminder",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        640,
+        -240
+      ],
+      "notesInFlow": true,
+      "webhookId": "d9813095-9889-494b-a8ae-c04fc84ba29d",
+      "credentials": {
+        "smtp": {
+          "id": "XcglOt7c8DYRWDxI",
+          "name": "Continuity SMTP"
+        }
+      },
+      "notes": "Attach your SMTP credentials to this node after import."
+    },
+    {
+      "parameters": {
+        "fromEmail": "scottbrown@boardmad.com",
+        "toEmail": "={{$json.owner_email}}",
+        "subject": "={{$json.subject}}",
+        "html": "={{$json.html_body}}",
+        "options": {}
+      },
+      "id": "e0dde94d-9dba-42a1-af13-616998f4108a",
+      "name": "Email - Send Overdue Warning",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        640,
+        -16
+      ],
+      "notesInFlow": true,
+      "webhookId": "3e9abd02-4a42-4e5d-8737-9669e9c99350",
+      "credentials": {
+        "smtp": {
+          "id": "XcglOt7c8DYRWDxI",
+          "name": "Continuity SMTP"
+        }
+      },
+      "notes": "Attach your SMTP credentials to this node after import."
+    },
+    {
+      "parameters": {
+        "fromEmail": "scottbrown@boardmad.com",
+        "toEmail": "={{$json.escalation_contact_email}}",
+        "subject": "={{$json.subject}}",
+        "html": "={{$json.html_body}}",
+        "attachments": "={{Object.keys($binary || {}).join(',')}}",
+        "options": {}
+      },
+      "id": "a0a1c937-96e2-4c19-a802-3b23ef0eada9",
+      "name": "Email - Send Escalation Notice",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        640,
+        240
+      ],
+      "notesInFlow": true,
+      "webhookId": "c902a4a0-4ecf-4c6a-b5a1-553e9cdf0df4",
+      "credentials": {
+        "smtp": {
+          "id": "XcglOt7c8DYRWDxI",
+          "name": "Continuity SMTP"
+        }
+      },
+      "notes": "Attach your SMTP credentials to this node after import. Informational only — no check-in link is sent to the escalation contact."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://continuity.boardmad.com/heartbeat-events/{{ $('HTTP - Prepare Reminder Payload').item.json.event_id }}/delivered",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "4471e9f0-5b36-4ddb-8c8a-cc6ddf2399dd",
+      "name": "HTTP - Mark Event Delivered",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        864,
+        -240
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "return {\n  json: {\n    workflow: 'Continuity MVP - Reminder Dispatch',\n    event_id: $json.id,\n    heartbeat_id: $json.heartbeat_id,\n    delivered_at: $json.delivered_at,\n    status: 'delivered'\n  }\n};"
+      },
+      "id": "379e739d-8625-4fbf-b7b3-f1ddece4d6ee",
+      "name": "Code - Execution Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://continuity.boardmad.com/heartbeat-events/{{ $json.event_id }}/delivered",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        864,
+        240
+      ],
+      "id": "72295fc2-fdfe-4b8b-8e85-8e57ac246e0b",
+      "name": "HTTP - Mark Escalation Delivered",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://continuity.boardmad.com/heartbeat-events/{{ $('HTTP - Prepare Overdue-Warning Payload').item.json.event_id }}/delivered",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        864,
+        -16
+      ],
+      "id": "59962c43-9402-43ff-a183-26948198b801",
+      "name": "HTTP - Mark Overdue Event Delivered"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Trigger - Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Evaluate Due Heartbeats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Evaluate Due Heartbeats": {
+      "main": [
+        [
+          {
+            "node": "HTTP - List Pending Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - List Pending Events": {
+      "main": [
+        [
+          {
+            "node": "Code - Expand Event Array",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Expand Event Array": {
+      "main": [
+        [
+          {
+            "node": "Switch - Route By Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Route By Event Type": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Prepare Reminder Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP - Prepare Overdue-Warning Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP - Prepare Escalation Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Prepare Reminder Payload": {
+      "main": [
+        [
+          {
+            "node": "Email - Send Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Prepare Overdue-Warning Payload": {
+      "main": [
+        [
+          {
+            "node": "Email - Send Overdue Warning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Prepare Escalation Payload": {
+      "main": [
+        [
+          {
+            "node": "Code - Expand Escalation Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Expand Escalation Attachments": {
+      "main": [
+        [
+          {
+            "node": "Switch - Escalation Attachment Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Escalation Attachment Path": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Download Escalation Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code - Assemble Escalation Email Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Download Escalation Attachment": {
+      "main": [
+        [
+          {
+            "node": "Code - Assemble Escalation Email Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Assemble Escalation Email Payload": {
+      "main": [
+        [
+          {
+            "node": "Email - Send Escalation Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email - Send Reminder": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Mark Event Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email - Send Overdue Warning": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Mark Overdue Event Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email - Send Escalation Notice": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Mark Escalation Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Mark Event Delivered": {
+      "main": [
+        [
+          {
+            "node": "Code - Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Mark Escalation Delivered": {
+      "main": [
+        [
+          {
+            "node": "Code - Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Mark Overdue Event Delivered": {
+      "main": [
+        [
+          {
+            "node": "Code - Execution Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f5cdf899-6e47-4179-9cb7-fc12063d6611",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e266552da8eb8cda6737af8f33af98e034c135375df4389a517210f3c2d756b2"
+  },
+  "nodeGroups": [],
+  "id": "51bqIm7u2tpzSeeD",
+  "tags": []
+}
