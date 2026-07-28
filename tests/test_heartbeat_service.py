@@ -337,7 +337,9 @@ def test_update_heartbeat_dashboard_settings_rejects_invalid_reminder_window() -
         )
 
 
-def test_update_heartbeat_dashboard_settings_clears_pending_lifecycle_events_on_schedule_change() -> None:
+def test_update_heartbeat_dashboard_settings_clears_pending_lifecycle_events_on_schedule_change() -> (
+    None
+):
     now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
     heartbeat = Heartbeat(
         id=uuid4(),
