@@ -95,7 +95,7 @@ GitHub Actions workflow: .github/workflows/ci.yml
 4. Lint:
 - ruff check app tests
 5. Test:
-- CONTINUITY_DATABASE_PASSWORD=test-password pytest -v
+- CONTINUITY_DATABASE_PASSWORD=my-test-password pytest -v
 
 ### Publish job (push events only)
 

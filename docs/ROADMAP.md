@@ -1,6 +1,6 @@
 # Continuity Roadmap
 
-## Current Snapshot (2026-07-23)
+## Current Snapshot (2026-07-28)
 
 This document tracks milestone progress from the currently implemented platform state.
 
@@ -36,17 +36,20 @@ Completed:
 8. Operations dashboard for heartbeat verification, inline heartbeat settings updates, heartbeat creation, and heartbeat deletion.
 9. Reminder queue metrics and stale alerting runbook support.
 10. Scripted Swarm deployment flow with migration-first release process.
+11. n8n-based end-to-end reminder and overdue dispatch wiring from pending events through delivered acknowledgment.
+12. Escalation policy execution path for escalation_due events, including escalation email preparation.
+13. Escalation attachment retrieval and delivery path for workflow-driven escalation notifications.
+14. Dashboard schedule edit behavior now clears stale undelivered lifecycle queue events when policy timing changes.
 
 In progress:
 
-1. End-to-end reminder dispatch wiring from pending events to outbound email transport.
-2. n8n-facing reminder preparation API is now in place (token issuance + send-ready content payload).
+1. Optional in-repo dispatcher/worker loop as an alternative to external n8n orchestration.
 
 Not started or not complete:
 
 1. First-class outbound email transport abstraction and provider configuration.
 2. End-to-end integration test that proves reminder email -> click -> reset across real components.
-3. Escalation policy execution for escalation_due events.
+3. End-to-end integration test coverage for escalation attachment delivery across workflow boundaries.
 4. Authn/authz for API surfaces.
 
 Escalation planning reference:
@@ -55,16 +58,16 @@ Escalation planning reference:
 
 ## MVP Execution Plan (Next Step After Review)
 
-Phase 1: Wire reminder dispatch
+Phase 1: Keep external workflow path healthy (operational baseline)
 
-1. Add a dispatch worker/service loop that:
+1. Optional: add an in-repo dispatch worker/service loop that:
 	- reads GET /heartbeat-events/pending
 	- for reminder_due events calls POST /heartbeat-events/{event_id}/prepare-reminder
 	- sends via configured mail transport
 	- marks event delivered only on successful send
 
-Note: production currently satisfies this phase operationally via n8n workflow orchestration
-outside this repository, but an in-repo dispatcher is still not implemented.
+Note: production currently satisfies dispatch operationally via n8n workflow orchestration,
+including reminder_due, overdue, and escalation_due processing. In-repo dispatch remains optional.
 
 Phase 2: Add integration testing harness
 
@@ -81,10 +84,19 @@ Phase 3: Capture MVP evidence
 
 ## Immediate Acceptance Criteria for "MVP Today"
 
+Status: Operationally achieved via API + n8n workflow path; formal automated end-to-end proof is still pending.
+
 1. Demonstrate one real reminder delivery.
 2. Complete one successful confirmation click-through.
 3. Show heartbeat next_due_at moved forward after confirmation.
 4. Show supporting event/check-in records persisted.
+
+## Recently Resolved (July 2026)
+
+1. Fixed dashboard regression where policy-time edits could leave stale timeline/next-action entries by clearing pending undelivered lifecycle queue events after schedule changes.
+2. Added dedupe protection for heartbeat lifecycle events at the database level with a unique constraint migration.
+3. Hardened n8n escalation attachment handling to support variable binary keys instead of assuming a fixed key, preventing silent no-attachment sends.
+4. Published repository-level onboarding/docs updates (README and workflow import artifacts) for current architecture and deployment flow.
 
 ## Risks to Watch
 
