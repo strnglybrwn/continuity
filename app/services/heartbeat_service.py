@@ -250,6 +250,8 @@ def evaluate_due_heartbeats(
     events_created = 0
 
     for heartbeat in heartbeats:
+        was_active = heartbeat.status == HeartbeatStatus.ACTIVE
+
         if is_heartbeat_reminder_due(
             heartbeat,
             now=current_time,
@@ -270,6 +272,17 @@ def evaluate_due_heartbeats(
         if calculated_status != heartbeat.status:
             heartbeat.status = calculated_status
             changed += 1
+
+            if was_active and calculated_status == HeartbeatStatus.OVERDUE:
+                # If evaluation runs after the reminder window has closed, enqueue
+                # the reminder once at overdue transition so it is not dropped.
+                reminder_event = record_heartbeat_event(
+                    session,
+                    heartbeat,
+                    HeartbeatEventType.REMINDER_DUE,
+                    occurred_at=heartbeat_reminder_at(heartbeat),
+                )
+                events_created += reminder_event is not None
 
             event = record_heartbeat_event(
                 session,

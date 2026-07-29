@@ -1086,6 +1086,89 @@ def test_evaluate_due_heartbeats_records_overdue_event() -> None:
     assert added_event.occurred_at == due_at
 
 
+def test_evaluate_due_heartbeats_backfills_reminder_at_overdue_transition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "lifecycle_day_seconds", 60)
+
+    due_at = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=due_at,
+    )
+
+    session = MagicMock()
+    session.scalar.return_value = None
+    session.query.return_value.filter.return_value.all.return_value = [heartbeat]
+
+    result = evaluate_due_heartbeats(
+        session,
+        now=due_at,
+    )
+
+    assert result == HeartbeatEvaluationResult(
+        evaluated=1,
+        changed=1,
+    )
+
+    added_events = [
+        item
+        for item in (call.args[0] for call in session.add.call_args_list)
+        if isinstance(item, HeartbeatEvent)
+    ]
+    assert [event.event_type for event in added_events] == [
+        HeartbeatEventType.REMINDER_DUE,
+        HeartbeatEventType.OVERDUE,
+    ]
+    assert added_events[0].occurred_at == datetime(2026, 7, 22, 11, 53, tzinfo=UTC)
+    assert added_events[1].occurred_at == due_at
+
+
+def test_evaluate_due_heartbeats_does_not_duplicate_backfilled_reminder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "lifecycle_day_seconds", 60)
+
+    due_at = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=due_at,
+    )
+
+    session = MagicMock()
+    # First scalar call checks for existing reminder (exists), second for overdue (new).
+    session.scalar.side_effect = [uuid4(), None]
+    session.query.return_value.filter.return_value.all.return_value = [heartbeat]
+
+    result = evaluate_due_heartbeats(
+        session,
+        now=due_at,
+    )
+
+    assert result == HeartbeatEvaluationResult(
+        evaluated=1,
+        changed=1,
+    )
+
+    added_events = [
+        item
+        for item in (call.args[0] for call in session.add.call_args_list)
+        if isinstance(item, HeartbeatEvent)
+    ]
+    assert [event.event_type for event in added_events] == [HeartbeatEventType.OVERDUE]
+    assert added_events[0].occurred_at == due_at
+
+
 def test_evaluate_due_heartbeats_emits_escalation_event_when_due(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
