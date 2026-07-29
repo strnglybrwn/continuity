@@ -75,7 +75,9 @@ def test_redeem_checkin_token_updates_everything_in_one_transaction() -> None:
 
     assert heartbeat.status == HeartbeatStatus.ACTIVE
     assert heartbeat.last_checkin_at == REDEEMED_AT
-    assert heartbeat.next_due_at == REDEEMED_AT + timedelta(days=30)
+    assert heartbeat.next_due_at == REDEEMED_AT + timedelta(days=21)
+    assert heartbeat.reminder_at_override == REDEEMED_AT + timedelta(days=14)
+    assert heartbeat.escalation_at_override == REDEEMED_AT + timedelta(days=22)
     assert token.used_at == REDEEMED_AT
 
     session.add.assert_called_once_with(result)

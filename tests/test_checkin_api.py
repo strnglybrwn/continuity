@@ -110,7 +110,9 @@ def test_post_checkin_redeems_valid_token() -> None:
     assert token.used_at is not None
     assert heartbeat.status == HeartbeatStatus.ACTIVE
     assert heartbeat.last_checkin_at is not None
-    assert heartbeat.next_due_at == heartbeat.last_checkin_at + timedelta(days=30)
+    assert heartbeat.reminder_at_override == heartbeat.last_checkin_at + timedelta(days=14)
+    assert heartbeat.next_due_at == heartbeat.last_checkin_at + timedelta(days=21)
+    assert heartbeat.escalation_at_override == heartbeat.last_checkin_at + timedelta(days=22)
 
     session.add.assert_called_once()
     session.commit.assert_called_once()

@@ -376,11 +376,18 @@ def _apply_heartbeat_checkin(
 
     heartbeat.status = HeartbeatStatus.ACTIVE
     heartbeat.last_checkin_at = created_at
-    heartbeat.reminder_at_override = None
-    heartbeat.escalation_at_override = None
-    heartbeat.next_due_at = created_at + lifecycle_duration(
-        heartbeat.interval_days,
-    )
+
+    if request.source == "token":
+        # Email-link check-ins rebase the upcoming schedule to a fixed sequence.
+        heartbeat.reminder_at_override = created_at + lifecycle_duration(14)
+        heartbeat.next_due_at = created_at + lifecycle_duration(21)
+        heartbeat.escalation_at_override = created_at + lifecycle_duration(22)
+    else:
+        heartbeat.reminder_at_override = None
+        heartbeat.escalation_at_override = None
+        heartbeat.next_due_at = created_at + lifecycle_duration(
+            heartbeat.interval_days,
+        )
 
     session.add(checkin)
 

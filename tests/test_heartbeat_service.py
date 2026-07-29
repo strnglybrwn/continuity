@@ -152,6 +152,39 @@ def test_create_heartbeat_checkin_updates_heartbeat() -> None:
     assert session.refresh.call_count == 2
 
 
+def test_create_heartbeat_checkin_from_token_rebases_schedule() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat_id = uuid4()
+
+    heartbeat = Heartbeat(
+        id=heartbeat_id,
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.OVERDUE,
+        interval_days=30,
+        reminder_days=7,
+        next_due_at=datetime(2026, 7, 1, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = heartbeat
+
+    checkin = create_heartbeat_checkin(
+        session,
+        heartbeat_id,
+        HeartbeatCheckInCreate(source="token"),
+        clock=lambda: now,
+    )
+
+    assert checkin is not None
+    assert checkin.source == "token"
+    assert heartbeat.status == HeartbeatStatus.ACTIVE
+    assert heartbeat.last_checkin_at == now
+    assert heartbeat.reminder_at_override == now + timedelta(days=14)
+    assert heartbeat.next_due_at == now + timedelta(days=21)
+    assert heartbeat.escalation_at_override == now + timedelta(days=22)
+
+
 def test_create_heartbeat_checkin_returns_none_when_not_found() -> None:
     heartbeat_id = uuid4()
     session = MagicMock()
