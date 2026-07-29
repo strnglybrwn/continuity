@@ -126,7 +126,7 @@ def is_heartbeat_reminder_due(
     if heartbeat.status != HeartbeatStatus.ACTIVE:
         return False
 
-    if heartbeat.reminder_days <= 0:
+    if heartbeat.reminder_days <= 0 and heartbeat.reminder_at_override is None:
         return False
 
     current_time = now if now is not None else utc_now()
@@ -519,6 +519,13 @@ def update_heartbeat_dashboard_settings(
 
     if escalation_enabled is not None and not escalation_enabled:
         heartbeat.escalation_at_override = None
+
+    if heartbeat.status in {HeartbeatStatus.ACTIVE, HeartbeatStatus.OVERDUE}:
+        heartbeat.status = (
+            HeartbeatStatus.OVERDUE
+            if heartbeat.next_due_at <= current_time
+            else HeartbeatStatus.ACTIVE
+        )
 
     updated_schedule_state = (
         heartbeat.interval_days,

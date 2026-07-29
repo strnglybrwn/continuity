@@ -464,6 +464,46 @@ def test_update_heartbeat_dashboard_settings_disabling_escalation_keeps_contact_
     assert heartbeat.escalation_contact_email == "ops@example.com"
 
 
+def test_update_heartbeat_dashboard_settings_resets_overdue_status_when_due_moves_future() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.OVERDUE,
+        interval_days=30,
+        reminder_days=7,
+        escalation_enabled=True,
+        escalation_delay_days=1,
+        escalation_contact_name="Ops",
+        escalation_contact_email="ops@example.com",
+        last_checkin_at=datetime(2026, 7, 1, 10, 0, tzinfo=UTC),
+        next_due_at=datetime(2026, 7, 20, 10, 0, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.get.return_value = heartbeat
+
+    update_heartbeat_dashboard_settings(
+        session,
+        heartbeat.id,
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        interval_days=30,
+        reminder_days=7,
+        escalation_enabled=True,
+        escalation_delay_days=1,
+        escalation_contact_name="Ops",
+        escalation_contact_email="ops@example.com",
+        next_due_at_override=datetime(2026, 7, 31, 10, 0, tzinfo=UTC),
+        reminder_at_override=datetime(2026, 7, 24, 10, 0, tzinfo=UTC),
+        escalation_at_override=datetime(2026, 8, 1, 10, 0, tzinfo=UTC),
+        now=now,
+    )
+
+    assert heartbeat.status == HeartbeatStatus.ACTIVE
+
+
 def test_active_heartbeat_becomes_overdue_after_due_time() -> None:
     now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
 
@@ -996,6 +1036,34 @@ def test_heartbeat_with_zero_reminder_days_has_no_advance_reminder() -> None:
     )
 
 
+def test_heartbeat_with_zero_reminder_days_uses_reminder_override() -> None:
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=0,
+        next_due_at=datetime(2026, 7, 22, 12, 0, tzinfo=UTC),
+        reminder_at_override=datetime(2026, 7, 22, 11, 55, tzinfo=UTC),
+    )
+
+    assert (
+        is_heartbeat_reminder_due(
+            heartbeat,
+            now=datetime(2026, 7, 22, 11, 54, tzinfo=UTC),
+        )
+        is False
+    )
+    assert (
+        is_heartbeat_reminder_due(
+            heartbeat,
+            now=datetime(2026, 7, 22, 11, 55, tzinfo=UTC),
+        )
+        is True
+    )
+
+
 def test_record_heartbeat_event_creates_new_event() -> None:
     heartbeat = Heartbeat(
         id=uuid4(),
@@ -1090,6 +1158,45 @@ def test_evaluate_due_heartbeats_records_reminder_event() -> None:
         tzinfo=UTC,
     )
     session.commit.assert_called_once()
+
+
+def test_evaluate_due_heartbeats_records_reminder_event_with_override_when_days_zero() -> None:
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=0,
+        next_due_at=datetime(2026, 8, 21, 12, 0, tzinfo=UTC),
+        reminder_at_override=datetime(2026, 8, 21, 11, 55, tzinfo=UTC),
+    )
+
+    session = MagicMock()
+    session.scalar.return_value = None
+    session.query.return_value.filter.return_value.all.return_value = [heartbeat]
+
+    result = evaluate_due_heartbeats(
+        session,
+        now=datetime(2026, 8, 21, 11, 56, tzinfo=UTC),
+    )
+
+    assert result == HeartbeatEvaluationResult(
+        evaluated=1,
+        changed=0,
+    )
+
+    added_event = session.add.call_args.args[0]
+    assert isinstance(added_event, HeartbeatEvent)
+    assert added_event.event_type == HeartbeatEventType.REMINDER_DUE
+    assert added_event.occurred_at == datetime(
+        2026,
+        8,
+        21,
+        11,
+        55,
+        tzinfo=UTC,
+    )
 
 
 def test_evaluate_due_heartbeats_records_overdue_event() -> None:

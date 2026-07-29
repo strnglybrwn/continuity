@@ -1,5 +1,5 @@
 [project]
-name = "continuity"
+name = "Continuity"
 version = "0.1.0"
 description = "Self-hosted digital continuity platform"
 requires-python = ">=3.12"

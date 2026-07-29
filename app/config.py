@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    application_name: str = "Digital Continuity"
+    application_name: str = "Continuity"
     application_version: str = "0.1.0"
     environment: str = "development"
 
