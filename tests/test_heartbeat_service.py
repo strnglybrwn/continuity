@@ -423,6 +423,47 @@ def test_update_heartbeat_dashboard_settings_keeps_pending_events_when_schedule_
     session.query.assert_not_called()
 
 
+def test_update_heartbeat_dashboard_settings_disabling_escalation_keeps_contact_details() -> None:
+    now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
+    heartbeat = Heartbeat(
+        id=uuid4(),
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        status=HeartbeatStatus.ACTIVE,
+        interval_days=30,
+        reminder_days=7,
+        escalation_enabled=True,
+        escalation_delay_days=1,
+        escalation_contact_name="Ops",
+        escalation_contact_email="ops@example.com",
+        last_checkin_at=datetime(2026, 7, 1, 10, 0, tzinfo=UTC),
+        next_due_at=datetime(2026, 7, 31, 10, 0, tzinfo=UTC),
+        reminder_at_override=None,
+        escalation_at_override=None,
+    )
+
+    session = MagicMock()
+    session.get.return_value = heartbeat
+
+    update_heartbeat_dashboard_settings(
+        session,
+        heartbeat.id,
+        owner_name="Scott",
+        owner_email="scott@example.com",
+        interval_days=30,
+        reminder_days=7,
+        escalation_enabled=False,
+        escalation_delay_days=1,
+        escalation_contact_name="Ops",
+        escalation_contact_email="ops@example.com",
+        now=now,
+    )
+
+    assert heartbeat.escalation_enabled is False
+    assert heartbeat.escalation_contact_name == "Ops"
+    assert heartbeat.escalation_contact_email == "ops@example.com"
+
+
 def test_active_heartbeat_becomes_overdue_after_due_time() -> None:
     now = datetime(2026, 7, 22, 12, 0, tzinfo=UTC)
 

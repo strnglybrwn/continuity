@@ -500,9 +500,6 @@ def update_heartbeat_dashboard_settings(
     if escalation_enabled:
         heartbeat.escalation_contact_name = escalation_contact_name
         heartbeat.escalation_contact_email = escalation_contact_email
-    elif escalation_enabled is not None and not escalation_enabled:
-        heartbeat.escalation_contact_name = None
-        heartbeat.escalation_contact_email = None
 
     base_time = heartbeat.last_checkin_at if heartbeat.last_checkin_at is not None else current_time
     heartbeat.next_due_at = (

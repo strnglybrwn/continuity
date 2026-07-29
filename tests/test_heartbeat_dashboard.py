@@ -79,20 +79,22 @@ def test_heartbeat_dashboard_empty_state(monkeypatch) -> None:
     assert "No heartbeats found yet." in response.text
 
 
-def test_heartbeat_dashboard_prefers_pending_event_timestamps_for_timeline(monkeypatch) -> None:
+def test_heartbeat_dashboard_uses_saved_schedule_times_for_timeline(monkeypatch) -> None:
     heartbeat = Heartbeat(
         id=uuid4(),
         owner_name="Scott",
         owner_email="scott@example.com",
-        status=HeartbeatStatus.OVERDUE,
+        status=HeartbeatStatus.ACTIVE,
         interval_days=2,
-        reminder_days=0,
+        reminder_days=1,
         escalation_enabled=True,
         escalation_delay_days=1,
         escalation_contact_name="Ops",
         escalation_contact_email="ops@example.com",
         last_checkin_at=datetime(2026, 7, 24, 20, 0, tzinfo=UTC),
         next_due_at=datetime(2026, 7, 26, 20, 5, tzinfo=UTC),
+        reminder_at_override=datetime(2026, 7, 26, 20, 0, tzinfo=UTC),
+        escalation_at_override=datetime(2026, 7, 26, 20, 10, tzinfo=UTC),
         created_at=datetime(2026, 7, 20, 20, 0, tzinfo=UTC),
         updated_at=datetime(2026, 7, 26, 20, 0, tzinfo=UTC),
     )
@@ -101,21 +103,21 @@ def test_heartbeat_dashboard_prefers_pending_event_timestamps_for_timeline(monke
             id=uuid4(),
             heartbeat_id=heartbeat.id,
             event_type=HeartbeatEventType.REMINDER_DUE,
-            occurred_at=datetime(2026, 7, 26, 20, 0, tzinfo=UTC),
+            occurred_at=datetime(2026, 7, 25, 19, 0, tzinfo=UTC),
             created_at=datetime(2026, 7, 26, 20, 0, tzinfo=UTC),
         ),
         HeartbeatEvent(
             id=uuid4(),
             heartbeat_id=heartbeat.id,
             event_type=HeartbeatEventType.OVERDUE,
-            occurred_at=datetime(2026, 7, 26, 20, 5, tzinfo=UTC),
+            occurred_at=datetime(2026, 7, 25, 19, 5, tzinfo=UTC),
             created_at=datetime(2026, 7, 26, 20, 5, tzinfo=UTC),
         ),
         HeartbeatEvent(
             id=uuid4(),
             heartbeat_id=heartbeat.id,
             event_type=HeartbeatEventType.ESCALATION_DUE,
-            occurred_at=datetime(2026, 7, 26, 20, 10, tzinfo=UTC),
+            occurred_at=datetime(2026, 7, 25, 19, 10, tzinfo=UTC),
             created_at=datetime(2026, 7, 26, 20, 10, tzinfo=UTC),
         ),
     ]
@@ -138,22 +140,27 @@ def test_heartbeat_dashboard_prefers_pending_event_timestamps_for_timeline(monke
     assert "26/07/2026 21:00 BST" in response.text
     assert "26/07/2026 21:05 BST" in response.text
     assert "26/07/2026 21:10 BST" in response.text
+    assert "25/07/2026 20:00 BST" not in response.text
+    assert "25/07/2026 20:05 BST" not in response.text
+    assert "25/07/2026 20:10 BST" not in response.text
 
 
-def test_heartbeat_dashboard_uses_delivered_event_times_for_timeline(monkeypatch) -> None:
+def test_heartbeat_dashboard_ignores_delivered_event_times_for_timeline(monkeypatch) -> None:
     heartbeat = Heartbeat(
         id=uuid4(),
         owner_name="Scott",
         owner_email="scott@example.com",
-        status=HeartbeatStatus.OVERDUE,
+        status=HeartbeatStatus.ACTIVE,
         interval_days=2,
-        reminder_days=0,
+        reminder_days=1,
         escalation_enabled=True,
         escalation_delay_days=1,
         escalation_contact_name="Ops",
         escalation_contact_email="ops@example.com",
         last_checkin_at=datetime(2026, 7, 24, 20, 0, tzinfo=UTC),
         next_due_at=datetime(2026, 7, 26, 20, 5, tzinfo=UTC),
+        reminder_at_override=datetime(2026, 7, 26, 20, 0, tzinfo=UTC),
+        escalation_at_override=datetime(2026, 7, 26, 20, 10, tzinfo=UTC),
         created_at=datetime(2026, 7, 20, 20, 0, tzinfo=UTC),
         updated_at=datetime(2026, 7, 26, 20, 0, tzinfo=UTC),
     )
@@ -162,7 +169,7 @@ def test_heartbeat_dashboard_uses_delivered_event_times_for_timeline(monkeypatch
             id=uuid4(),
             heartbeat_id=heartbeat.id,
             event_type=HeartbeatEventType.REMINDER_DUE,
-            occurred_at=datetime(2026, 7, 26, 20, 0, tzinfo=UTC),
+            occurred_at=datetime(2026, 7, 25, 19, 0, tzinfo=UTC),
             delivered_at=datetime(2026, 7, 26, 20, 0, 30, tzinfo=UTC),
             created_at=datetime(2026, 7, 26, 20, 0, tzinfo=UTC),
         ),
@@ -170,7 +177,7 @@ def test_heartbeat_dashboard_uses_delivered_event_times_for_timeline(monkeypatch
             id=uuid4(),
             heartbeat_id=heartbeat.id,
             event_type=HeartbeatEventType.OVERDUE,
-            occurred_at=datetime(2026, 7, 26, 20, 5, tzinfo=UTC),
+            occurred_at=datetime(2026, 7, 25, 19, 5, tzinfo=UTC),
             delivered_at=datetime(2026, 7, 26, 20, 5, 30, tzinfo=UTC),
             created_at=datetime(2026, 7, 26, 20, 5, tzinfo=UTC),
         ),
@@ -178,7 +185,7 @@ def test_heartbeat_dashboard_uses_delivered_event_times_for_timeline(monkeypatch
             id=uuid4(),
             heartbeat_id=heartbeat.id,
             event_type=HeartbeatEventType.ESCALATION_DUE,
-            occurred_at=datetime(2026, 7, 26, 20, 10, tzinfo=UTC),
+            occurred_at=datetime(2026, 7, 25, 19, 10, tzinfo=UTC),
             delivered_at=datetime(2026, 7, 26, 20, 10, 30, tzinfo=UTC),
             created_at=datetime(2026, 7, 26, 20, 10, tzinfo=UTC),
         ),
@@ -210,6 +217,9 @@ def test_heartbeat_dashboard_uses_delivered_event_times_for_timeline(monkeypatch
     assert "26/07/2026 21:00 BST" in response.text
     assert "26/07/2026 21:05 BST" in response.text
     assert "26/07/2026 21:10 BST" in response.text
+    assert "25/07/2026 20:00 BST" not in response.text
+    assert "25/07/2026 20:05 BST" not in response.text
+    assert "25/07/2026 20:10 BST" not in response.text
 
 
 def test_heartbeat_dashboard_update_redirects_with_success(monkeypatch) -> None:
